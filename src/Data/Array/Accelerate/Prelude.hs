@@ -9,6 +9,7 @@
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE UndecidableInstances  #-}
 -- |
 -- Module      : Data.Array.Accelerate.Prelude
 -- Copyright   : [2009..2017] Manuel M T Chakravarty, Gabriele Keller, Trevor L. McDonell
@@ -108,6 +109,9 @@ module Data.Array.Accelerate.Prelude (
 
   -- * Sequence operations
   -- fromSeq, fromSeqElems, fromSeqShapes, toSeqInner, toSeqOuter2, toSeqOuter3, generateSeq,
+
+  -- * Stencil helpers
+  coefficients, convolve
 
 ) where
 
@@ -2390,3 +2394,114 @@ _3 :: forall sh. (Shape sh, Slice sh) => Lens' (Exp (sh:.Int:.Int:.Int)) (Exp In
 _3 = lens (\ix   -> let _  :. z :. _ :. _ = unlift ix :: Exp sh :. Exp Int :. Exp Int :. Exp Int in z)
           (\ix z -> let sh :. _ :. y :. x = unlift ix :: Exp sh :. Exp Int :. Exp Int :. Exp Int in lift (sh :. z :. y :. x))
 
+
+
+-- Stencils
+-- --------
+--
+class Num a => Coefficients a stencil where
+  coefficients :: stencil -> stencil -> Exp a
+
+convolve
+     :: forall sh a coefficients.
+        (Stencil sh a coefficients, Coefficients a coefficients)
+     => coefficients
+     -> Acc (Array sh a)
+     -> Acc (Array sh a)
+convolve c = stencil (coefficients c) (function $ const 0)
+
+instance (Num t, t ~ a, t ~ b, t ~ c)
+  => Coefficients t (Exp a, Exp b, Exp c) where
+  coefficients (a, b, c)
+               (z, y, x)
+    = a * z + b * y + c * x
+
+instance (Num t , t ~ a, t ~ b, t ~ c, t ~ d, t ~ e)
+  => Coefficients t (Exp a, Exp b, Exp c, Exp d, Exp e) where
+  coefficients (a, b, c, d, e)
+               (z, y, x, w, v)
+    = a * z + b * y + c * x + d * w + e * v
+
+instance (Num t, t ~ a, t ~ b, t ~ c, t ~ d, t ~ e, t ~ f, t ~ g)
+  => Coefficients t (Exp a, Exp b, Exp c, Exp d, Exp e, Exp f, Exp g) where
+  coefficients (a, b, c, d, e, f, g)
+               (z, y, x, w, v, t, s)
+    = a * z + b * y + c * x + d * w + e * v + f * t + g * s
+
+instance (Num t, t ~ a, t ~ b, t ~ c, t ~ d, t ~ e, t ~ f, t ~ g, t ~ h, t ~ i)
+  => Coefficients t (Exp a, Exp b, Exp c, Exp d, Exp e, Exp f, Exp g, Exp h, Exp i) where
+  coefficients (a, b, c, d, e, f, g, h, i)
+               (z, y, x, w, v, t, s, r, q)
+    = a * z + b * y + c * x + d * w + e * v + f * t + g * s + h * r + i * q
+
+instance {-# overlaps #-}
+  ( Coefficients a stencilA
+  , Coefficients b stencilB
+  , Coefficients c stencilC
+  , t ~ a, t ~ b, t ~ c
+  ) => Coefficients t (stencilA, stencilB, stencilC) where
+  coefficients (a, b, c)
+               (z, y, x)
+    = coefficients a z
+    + coefficients b y
+    + coefficients c x
+
+instance {-# overlaps #-}
+  ( Coefficients a stencilA
+  , Coefficients b stencilB
+  , Coefficients c stencilC
+  , Coefficients d stencilD
+  , Coefficients e stencilE
+  , t ~ a, t ~ b, t ~ c, t ~ d, t ~ e
+  ) => Coefficients t (stencilA, stencilB, stencilC, stencilD, stencilE) where
+  coefficients (a, b, c, d, e)
+               (z, y, x, w, v)
+    = coefficients a z
+    + coefficients b y
+    + coefficients c x
+    + coefficients d w
+    + coefficients e v
+
+instance {-# overlaps #-}
+  ( Coefficients a stencilA
+  , Coefficients b stencilB
+  , Coefficients c stencilC
+  , Coefficients d stencilD
+  , Coefficients e stencilE
+  , Coefficients f stencilF
+  , Coefficients g stencilG
+  , t ~ a, t ~ b, t ~ c, t ~ d, t ~ e, t ~ f, t ~ g
+  ) => Coefficients t (stencilA, stencilB, stencilC, stencilD, stencilE, stencilF, stencilG) where
+  coefficients (a, b, c, d, e, f, g)
+               (z, y, x, w, v, t, s)
+    = coefficients a z
+    + coefficients b y
+    + coefficients c x
+    + coefficients d w
+    + coefficients e v
+    + coefficients f t
+    + coefficients g s
+
+instance {-# overlaps #-}
+  ( Coefficients a stencilA
+  , Coefficients b stencilB
+  , Coefficients c stencilC
+  , Coefficients d stencilD
+  , Coefficients e stencilE
+  , Coefficients f stencilF
+  , Coefficients g stencilG
+  , Coefficients h stencilH
+  , Coefficients i stencilI
+  , t ~ a, t ~ b, t ~ c, t ~ d, t ~ e, t ~ f, t ~ g, t ~ h, t ~ i
+  ) => Coefficients t (stencilA, stencilB, stencilC, stencilD, stencilE, stencilF, stencilG, stencilH, stencilI) where
+  coefficients (a, b, c, d, e, f, g, h, i)
+               (z, y, x, w, v, t, s, r, q)
+    = coefficients a z
+    + coefficients b y
+    + coefficients c x
+    + coefficients d w
+    + coefficients e v
+    + coefficients f t
+    + coefficients g s
+    + coefficients h r
+    + coefficients i q
