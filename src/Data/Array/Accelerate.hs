@@ -332,7 +332,15 @@ module Data.Array.Accelerate (
   ilift1, ilift2, ilift3,
 
   -- ** Pattern synonyms
-  pattern MkT, IsTuple, IsAtuple,
+  pattern MkT,
+
+  pattern E2 , pattern E3 , pattern E4 , pattern E5 ,
+  pattern E6 , pattern E7 , pattern E8 , pattern E9 , pattern E10,
+  pattern E11, pattern E12, pattern E13, pattern E14, pattern E15,
+
+  pattern A2 , pattern A3 , pattern A4 , pattern A5 ,
+  pattern A6 , pattern A7 , pattern A8 , pattern A9 , pattern A10,
+  pattern A11, pattern A12, pattern A13, pattern A14, pattern A15,
 
   -- ** Scalar operations
   -- *** Introduction
