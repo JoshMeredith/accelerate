@@ -222,6 +222,9 @@ simplifyOpenExp env = first getAny . cvtE
           env'  = env `pushExp` snd bnd'
           body' = cvtE' (incExp env') body
 
+      Match{} -> undefined
+      Jump{}  -> undefined
+
       Var ix                    -> pure $ Var ix
       Const c                   -> pure $ Const c
       Undef                     -> pure Undef
@@ -613,6 +616,10 @@ summariseOpenExp = (terms +~ 1) . goE
     goE :: PreOpenExp acc env aenv t -> Stats
     goE exp =
       case exp of
+
+        Match{} -> undefined
+        Jump{}  -> undefined
+
         Let bnd body          -> travE bnd +++ travE body & binders +~ 1
         Var{}                 -> zero & vars +~ 1
         Foreign _ _ x         -> travE x & terms +~ 1   -- +1 for asm, ignore fallback impls.

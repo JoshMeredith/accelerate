@@ -533,6 +533,8 @@ fvPreOpenExp fvA env aenv = fv
     fvF = fvPreOpenFun fvA env aenv
 
     fv :: PreOpenExp acc env aenv e -> [Vertex]
+    fv Match{}                  = undefined
+    fv Jump{}                   = undefined
     fv (Shape acc)              = if cfgIncludeShape then fvA aenv acc else []
     fv (Index acc i)            = concat [ fvA aenv acc, fv i ]
     fv (LinearIndex acc i)      = concat [ fvA aenv acc, fv i ]

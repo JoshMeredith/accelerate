@@ -949,6 +949,10 @@ evalPreOpenExp evalAcc pexp env aenv =
       evalA a = evalAcc a aenv
   in
   case pexp of
+
+    Match{} -> undefined
+    Jump{}  -> undefined
+
     Let exp1 exp2               -> let !v1  = evalE exp1
                                        env' = env `PushElt` fromElt v1
                                    in  evalPreOpenExp evalAcc exp2 env' aenv

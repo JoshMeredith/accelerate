@@ -314,6 +314,8 @@ prettyPreOpenExp
     -> Adoc
 prettyPreOpenExp ctx prettyAcc extractAcc env aenv exp =
   case exp of
+    Match{} -> undefined
+    Jump{}  -> undefined
     Var idx             -> prj idx env
     Let{}               -> prettyLet ctx prettyAcc extractAcc env aenv exp
     PrimApp f x

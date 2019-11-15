@@ -7,6 +7,9 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE PatternSynonyms       #-}
+{-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE MagicHash             #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- |
 -- Module      : Data.Array.Accelerate.Data.Either
@@ -25,6 +28,8 @@ module Data.Array.Accelerate.Data.Either (
   Either(..),
   left, right,
   either, isLeft, isRight, fromLeft, fromRight, lefts, rights,
+
+  pattern Left#, pattern Right#
 
 ) where
 
@@ -148,6 +153,30 @@ instance (Elt a, Elt b) => Elt (Either a b) where
   toElt (_         ,b)  = Right (toElt b)
   fromElt (Left a)      = ((((),0), fromElt a), fromElt (evalUndef @b))
   fromElt (Right b)     = ((((),1), fromElt (evalUndef @a)), fromElt b)
+
+instance (Elt a, Elt b) => Emb (Either a b) where
+  variants = [TagIx 0, TagIx 1]
+  mask     = Mask 2
+
+pattern Left# :: (Elt a, Elt b) => Exp a -> Exp (Either a b)
+pattern Left# x <- (extractLeft -> Just x)
+  where
+    Left# = left
+
+-- pattern Left# x = x@(Exp (Match (TagIx 0) _))
+
+pattern Right# :: (Elt a, Elt b) => Exp b -> Exp (Either a b)
+pattern Right# x <- (extractRight -> Just x)
+  where
+    Right# = right
+
+extractLeft :: (Elt a, Elt b) => Exp (Either a b) -> Maybe (Exp a)
+extractLeft (Exp (Match xy (TagIx 0))) = Just (fromLeft xy)
+extractLeft _ = Nothing
+
+extractRight :: (Elt a, Elt b) => Exp (Either a b) -> Maybe (Exp b)
+extractRight (Exp (Match xy (TagIx 1))) = Just (fromRight xy)
+extractRight _ = Nothing
 
 instance (Elt a, Elt b) => IsProduct Elt (Either a b) where
   type ProdRepr (Either a b) = ProdRepr (Word8, a, b)

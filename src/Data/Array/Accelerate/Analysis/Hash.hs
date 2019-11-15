@@ -326,6 +326,8 @@ encodePreOpenExp options encodeAcc exp =
       nacl = encodeTupleType (eltType @exp)
   in
   case exp of
+    Match{}                     -> undefined
+    Jump{}                      -> undefined
     Let bnd body                -> intHost $(hashQ "Let")         <> travE bnd <> travE body
     Var ix                      -> intHost $(hashQ "Var")         <> nacl <> encodeIdx ix
     Tuple t                     -> intHost $(hashQ "Tuple")       <> nacl <> encodeTuple options encodeAcc t

@@ -72,7 +72,6 @@ import qualified Data.Array.Accelerate.AST              as AST
 import Data.Array.Accelerate.Debug.Trace                as Debug
 import Data.Array.Accelerate.Debug.Flags                as Debug
 
-
 -- Layouts
 -- -------
 
@@ -681,6 +680,11 @@ convertSharingExp config lyt alyt env aenv exp@(ScopedExp lams _) = cvt exp
         AST.Let (cvt (ScopedExp [] boundExp)) (convertSharingExp config lyt' alyt (se:env') aenv bodyExp)
     cvt (ScopedExp _ (ExpSharing _ pexp))
       = case pexp of
+
+          Match e ix      -> AST.Match (cvt e) ix
+          Jump  mask x es -> AST.Jump  mask (cvt x) (map cvtEqn es)
+
+
           Tag i                 -> AST.Var (prjIdx ("de Bruijn conversion tag " ++ show i) i lyt)
           Const v               -> AST.Const (fromElt v)
           Undef                 -> AST.Undef
@@ -705,6 +709,9 @@ convertSharingExp config lyt alyt env aenv exp@(ScopedExp lams _) = cvt exp
           Union sh1 sh2         -> AST.Union (cvt sh1) (cvt sh2)
           Foreign ff f e        -> AST.Foreign ff (convertFunWith config f) (cvt e)
           Coerce e              -> AST.Coerce (cvt e)
+
+    cvtEqn :: forall arg t'. Elt t' => (TagIx arg, ScopedExp t') -> (TagIx arg, AST.OpenExp env aenv t')
+    cvtEqn (ix, x) = (ix, cvt x)
 
     cvtA :: Arrays a => ScopedAcc a -> AST.OpenAcc aenv a
     cvtA = convertSharingAcc config alyt aenv
@@ -1645,6 +1652,15 @@ makeOccMapSharingExp config accOccMap expOccMap = travE
                             return (UnscopedExp [] (ExpSharing (StableNameHeight sn height) exp), height)
 
           case pexp of
+            Match e ix          -> reconstruct $ do
+                                      (e', h) <- travE lvl e
+                                      return (Match e' ix, h+1)
+
+            Jump m e js         -> reconstruct $ do -- TODO-SUMS: Is this correct?
+                                      (e', h) <- travE lvl e
+                                      (js', hs) <- unzip <$> mapM travEqn js
+                                      return (Jump m e' js', maximum (h:hs) + 1)
+
             Tag i               -> reconstruct $ return (Tag i, 0)      -- height is 0!
             Const c             -> reconstruct $ return (Const c, 1)
             Undef               -> reconstruct $ return (Undef, 1)
@@ -1679,6 +1695,10 @@ makeOccMapSharingExp config accOccMap expOccMap = travE
             Coerce e            -> reconstruct $ travE1 Coerce e
 
       where
+        travEqn :: (TagIx arg, Exp a)
+                -> IO ((TagIx arg, UnscopedExp a), Int)
+        travEqn (ix, e) = do (e', h) <- travE lvl e; return ((ix, e'), h)
+
         traverseAcc :: Typeable arrs => Level -> Acc arrs -> IO (UnscopedAcc arrs, Int)
         traverseAcc = makeOccMapSharingAcc config accOccMap
 
@@ -2513,6 +2533,13 @@ determineScopesSharingExp config accOccMap expOccMap = scopesExp
 
     scopesExp (UnscopedExp _ (ExpSharing sn pexp))
       = case pexp of
+          Match e ix            -> let (e', accCount) = scopesExp e
+                                   in reconstruct (Match e' ix) accCount
+          Jump m e js           -> let
+                                     (e', accCount ) = scopesExp e -- TODO-SUMS: is this correct?
+                                     (es, accCount') = foldr travEqn ([], accCount) js
+                                   in reconstruct (Jump m e' es) accCount'
+
           Tag i                 -> reconstruct (Tag i) noNodeCounts
           Const c               -> reconstruct (Const c) noNodeCounts
           Undef                 -> reconstruct Undef noNodeCounts
@@ -2544,6 +2571,8 @@ determineScopesSharingExp config accOccMap expOccMap = scopesExp
           Foreign ff f e        -> travE1 (Foreign ff f) e
           Coerce e              -> travE1 Coerce e
       where
+        travEqn (ix, e) (es, n) = let (e', accCount) = scopesExp e in ((ix, e'):es, accCount +++ n)
+
         travTup :: Tuple UnscopedExp tup -> (Tuple ScopedExp tup, NodeCounts)
         travTup NilTup          = (NilTup, noNodeCounts)
         travTup (SnocTup tup e) = let

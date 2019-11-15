@@ -377,6 +377,9 @@ rebuildPreOpenExp
     -> f (PreOpenExp acc env' aenv' t)
 rebuildPreOpenExp k v av exp =
   case exp of
+    Match e ix          -> Match <$> rebuildPreOpenExp k v av e <*> pure ix
+    Jump m e js         -> Jump m <$> rebuildPreOpenExp k v av e <*> undefined js
+
     Const c             -> pure (Const c)
     PrimConst c         -> pure (PrimConst c)
     Undef               -> pure Undef

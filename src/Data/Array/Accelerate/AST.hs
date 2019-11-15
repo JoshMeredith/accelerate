@@ -114,6 +114,8 @@ module Data.Array.Accelerate.AST (
   -- debugging
   showPreAccOp, showPreExpOp,
 
+  Emb(..), TagIx(..), Mask(..),
+
 ) where
 
 --standard library
@@ -835,6 +837,15 @@ type PreExp acc = PreOpenExp acc ()
 --
 type Exp = OpenExp ()
 
+
+data TagIx a = TagIx Int
+data Mask  a = Mask  Int
+
+class Elt a => Emb a where
+  variants :: [TagIx a]
+  mask :: Mask a
+
+
 -- |Parametrised open expressions using de Bruijn indices for variables ranging over tuples
 -- of scalars and arrays of tuples.  All code, except Cond, is evaluated eagerly.  N-tuples are
 -- represented as nested pairs.
@@ -842,6 +853,16 @@ type Exp = OpenExp ()
 -- The data type is parametrised over the surface types (not the representation type).
 --
 data PreOpenExp acc env aenv t where
+  Match         :: Emb t
+                => PreOpenExp acc env aenv t
+                -> TagIx t
+                -> PreOpenExp acc env aenv t
+
+  Jump          :: (Emb arg, Elt t)
+                => Mask arg
+                -> PreOpenExp acc env aenv arg
+                -> [(TagIx arg, PreOpenExp acc env aenv t)]
+                -> PreOpenExp acc env aenv t
 
   -- Local binding of a scalar expression
   Let           :: (Elt bnd_t, Elt body_t)
@@ -1288,8 +1309,13 @@ rnfPreOpenExp rnfA topExp =
 
       rnfE :: PreOpenExp acc env' aenv' t' -> ()
       rnfE = rnfPreOpenExp rnfA
+
+      rnfTE :: forall arg. (TagIx arg, PreOpenExp acc env aenv t) -> ()
+      rnfTE (TagIx i, x) = i `seq` rnfE x
   in
   case topExp of
+    Match x t                 -> rnfTE (t, x)
+    Jump (Mask i) e table     -> i `seq` rnfE e `seq` foldl' (\() x -> x `seq` ()) () (map rnfTE table)
     Let bnd body              -> rnfE bnd `seq` rnfE body
     Var ix                    -> rnfIdx ix
     Foreign asm f x           -> rnf (strForeign asm) `seq` rnfF f `seq` rnfE x
@@ -1545,6 +1571,8 @@ liftPreOpenExp liftA pexp =
       liftT (SnocTup tup e) = [|| SnocTup $$(liftT tup) $$(liftE e) ||]
   in
   case pexp of
+    Match _ix _x              -> undefined
+    Jump _mask _x _table      -> undefined
     Let bnd body              -> [|| Let $$(liftPreOpenExp liftA bnd) $$(liftPreOpenExp liftA body) ||]
     Var ix                    -> [|| Var $$(liftIdx ix) ||]
     Foreign asm f x           -> [|| Foreign $$(liftForeign asm) $$(liftPreOpenFun liftA f) $$(liftE x) ||]
@@ -1894,6 +1922,8 @@ showShortendArr arr
 
 
 showPreExpOp :: forall acc env aenv t. PreOpenExp acc env aenv t -> String
+showPreExpOp Match{}            = "Match"
+showPreExpOp Jump{}             = "Jump"
 showPreExpOp Let{}              = "Let"
 showPreExpOp (Var ix)           = "Var x" ++ show (idxToInt ix)
 showPreExpOp (Const c)          = "Const " ++ show (toElt c :: t)

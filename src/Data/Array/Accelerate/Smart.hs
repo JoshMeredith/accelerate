@@ -68,6 +68,8 @@ module Data.Array.Accelerate.Smart (
   -- Debugging
   showPreAccOp, showPreExpOp,
 
+  Emb(..), TagIx(..), Mask(..), match,
+
 ) where
 
 -- standard library
@@ -562,6 +564,10 @@ deriving instance Typeable Seq
 --}
 
 
+match :: (Emb a, Elt b) => (Exp a -> Exp b) -> (Exp a -> Exp b)
+match f x = Exp $ Jump mask x [(v, f (Exp $ Match x v)) | v <- variants]
+
+
 -- Embedded expressions of the surface language
 -- --------------------------------------------
 
@@ -588,6 +594,17 @@ deriving instance Typeable Exp
 -- the type of collective array operations.
 --
 data PreExp acc exp t where
+  Match         :: Emb t
+                => exp t
+                -> TagIx t
+                -> PreExp acc exp t
+
+  Jump          :: (Emb arg, Elt t)
+                => Mask arg
+                -> exp arg
+                -> [(TagIx arg, exp t)]
+                -> PreExp acc exp t
+
     -- Needed for conversion to de Bruijn form
   Tag           :: Elt t
                 => Level                        -- environment size at defining occurrence
@@ -2305,6 +2322,8 @@ showShortendArr arr
 
 
 showPreExpOp :: PreExp acc exp t -> String
+showPreExpOp Match{}            = "Match"
+showPreExpOp Jump{}             = "Jump"
 showPreExpOp (Tag i)            = "Tag" ++ show i
 showPreExpOp (Const c)          = "Const " ++ show c
 showPreExpOp Undef              = "Undef"

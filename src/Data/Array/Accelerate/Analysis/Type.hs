@@ -164,6 +164,8 @@ preExpType :: forall acc aenv env t.
            -> TupleType (EltRepr t)
 preExpType k e =
   case e of
+    Match _ _         -> eltType @t
+    Jump _ _ _        -> eltType @t
     Let _ _           -> eltType @t
     Var _             -> eltType @t
     Const _           -> eltType @t
