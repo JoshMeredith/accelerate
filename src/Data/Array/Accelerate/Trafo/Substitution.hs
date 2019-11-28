@@ -369,7 +369,8 @@ shiftE k v (SuccIdx ix) = weakenExp k <$> (v ix)
 
 {-# INLINEABLE rebuildPreOpenExp #-}
 rebuildPreOpenExp
-    :: (Applicative f, SyntacticExp fe, SyntacticAcc fa)
+    :: forall f fe fa acc t env env' aenv aenv'.
+       (Applicative f, SyntacticExp fe, SyntacticAcc fa)
     => RebuildAcc acc
     -> (forall t'. Elt t'    => Idx env t'  -> f (fe acc env' aenv' t'))
     -> (forall t'. Arrays t' => Idx aenv t' -> f (fa acc aenv' t'))
@@ -378,7 +379,7 @@ rebuildPreOpenExp
 rebuildPreOpenExp k v av exp =
   case exp of
     Match e ix          -> Match  <$> rebuildPreOpenExp k v av e <*> pure ix
-    Jump m e js         -> Jump m <$> rebuildPreOpenExp k v av e <*> undefined js
+    Jump m e js         -> Jump m <$> rebuildPreOpenExp k v av e <*> traverse rebuildEqn js
 
     Const c             -> pure (Const c)
     PrimConst c         -> pure (PrimConst c)
@@ -407,6 +408,12 @@ rebuildPreOpenExp k v av exp =
     Union s t           -> Union        <$> rebuildPreOpenExp k v av s  <*> rebuildPreOpenExp k v av t
     Foreign ff f e      -> Foreign ff f <$> rebuildPreOpenExp k v av e
     Coerce e            -> Coerce       <$> rebuildPreOpenExp k v av e
+  where
+    rebuildEqn :: forall arg.
+                    (TagIx arg, PreOpenExp acc env  aenv  t)
+               -> f (TagIx arg, PreOpenExp acc env' aenv' t)
+    rebuildEqn (ix, e) = (\x -> (ix, x)) <$> rebuildPreOpenExp k v av e
+
 
 {-# INLINEABLE rebuildTup #-}
 rebuildTup

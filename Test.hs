@@ -1,4 +1,4 @@
-{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE MagicHash, FlexibleContexts #-}
 
 module Test where
 
@@ -13,10 +13,12 @@ main = do
   let
     exprs = fromList (Z :. 2) [Left 1, Right ()] :: Vector (Either Int ())
 
-  print (A.map eitherToBool $ use exprs)
+  print (A.map fn $ use exprs)
+  print . run $ A.map fn $ use exprs
 
-eitherToBool :: (Elt a, Elt b) => Exp (Either a b) -> Exp Bool
-eitherToBool = match go
+
+fn :: Exp (Either Int ()) -> Exp Int
+fn = match go
   where
-    go (Left#  _) = constant True
-    go (Right# _) = constant False
+    go (Left#  x) = x + 1
+    go (Right# _) = 0

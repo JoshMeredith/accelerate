@@ -60,6 +60,8 @@ import Data.Array.Accelerate.AST                                    hiding ( Val
 import Data.Array.Accelerate.Array.Sugar
 import Data.Array.Accelerate.Type
 
+import Data.List (intersperse)
+
 
 -- Implementation
 -- --------------
@@ -314,8 +316,13 @@ prettyPreOpenExp
     -> Adoc
 prettyPreOpenExp ctx prettyAcc extractAcc env aenv exp =
   case exp of
-    Match{} -> undefined
-    Jump{}  -> undefined
+    Match e (TagIx ix) -> sep [ "Match:", pretty ix, "->", ppE e ctx ]
+    Jump (Mask m) e js -> sep [ "Jump:"
+                              , parens (sep [ "Mask", pretty m])
+                              , parens (ppE e ctx)
+                              , "["
+                              , sep (intersperse "," (map ppEqn js))
+                              , "]" ]
     Var idx             -> prj idx env
     Let{}               -> prettyLet ctx prettyAcc extractAcc env aenv exp
     PrimApp f x
@@ -363,6 +370,9 @@ prettyPreOpenExp ctx prettyAcc extractAcc env aenv exp =
     Undef                 -> withTypeRep "undef"
 
   where
+    ppEqn :: forall arg. (TagIx arg, PreOpenExp acc env aenv t) -> Adoc
+    ppEqn (TagIx ix, e) = parens $ sep [ "Tag", pretty ix, "->", ppE e ctx ]
+
     ppE :: PreOpenExp acc env aenv e -> Context -> Adoc
     ppE e c = prettyPreOpenExp c prettyAcc extractAcc env aenv e
 
