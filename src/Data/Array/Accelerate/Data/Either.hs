@@ -10,6 +10,7 @@
 {-# LANGUAGE PatternSynonyms       #-}
 {-# LANGUAGE ViewPatterns          #-}
 {-# LANGUAGE MagicHash             #-}
+{-# LANGUAGE DataKinds #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- |
 -- Module      : Data.Array.Accelerate.Data.Either
@@ -29,7 +30,7 @@ module Data.Array.Accelerate.Data.Either (
   left, right,
   either, isLeft, isRight, fromLeft, fromRight, lefts, rights,
 
-  pattern Left#, pattern Right#
+  pattern Left_, pattern Right_
 
 ) where
 
@@ -148,27 +149,25 @@ instance (Elt a, Elt b) => Elt (Either a b) where
   {-# INLINE eltType     #-}
   {-# INLINE [1] toElt   #-}
   {-# INLINE [1] fromElt #-}
+  variants = Just [TagIx 0, TagIx 1]
+  mask     = Just (Mask 2)
   eltType = eltType @(Word8,a,b)
   toElt ((((),0),a),_)  = Left  (toElt a)
   toElt (_         ,b)  = Right (toElt b)
   fromElt (Left a)      = ((((),0), fromElt a), fromElt (evalUndef @b))
   fromElt (Right b)     = ((((),1), fromElt (evalUndef @a)), fromElt b)
 
-instance (Elt a, Elt b) => Emb (Either a b) where
-  variants = [TagIx 0, TagIx 1]
-  mask     = Mask 2
-
-pattern Left# :: (Elt a, Elt b) => Exp a -> Exp (Either a b)
-pattern Left# x <- (extractLeft -> Just x)
+pattern Left_ :: (Elt a, Elt b) => Exp a -> Exp (Either a b)
+pattern Left_ x <- (extractLeft -> Just x)
   where
-    Left# = left
+    Left_ = left
 
--- pattern Left# x = x@(Exp (Match (TagIx 0) _))
+-- pattern Left_ x = x@(Exp (Match (TagIx 0) _))
 
-pattern Right# :: (Elt a, Elt b) => Exp b -> Exp (Either a b)
-pattern Right# x <- (extractRight -> Just x)
+pattern Right_ :: (Elt a, Elt b) => Exp b -> Exp (Either a b)
+pattern Right_ x <- (extractRight -> Just x)
   where
-    Right# = right
+    Right_ = right
 
 extractLeft :: (Elt a, Elt b) => Exp (Either a b) -> Maybe (Exp a)
 extractLeft (Exp (Match xy (TagIx 0))) = Just (fromLeft xy)

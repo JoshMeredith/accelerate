@@ -9,6 +9,8 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE DataKinds             #-}
 {-# OPTIONS_HADDOCK hide #-}
 -- |
 -- Module      : Data.Array.Accelerate.Smart
@@ -68,7 +70,7 @@ module Data.Array.Accelerate.Smart (
   -- Debugging
   showPreAccOp, showPreExpOp,
 
-  Emb(..), TagIx(..), Mask(..), match,
+  TagIx(..), Mask(..), match,
 
 ) where
 
@@ -564,8 +566,38 @@ deriving instance Typeable Seq
 --}
 
 
-match :: (Emb a, Elt b) => (Exp a -> Exp b) -> (Exp a -> Exp b)
-match f x = Exp $ Jump mask x [(v, f (Exp $ Match x v)) | v <- variants]
+-- match :: (Emb a, Elt b) => (Exp a -> Exp b) -> (Exp a -> Exp b)
+-- match f x = Exp $ Jump mask x [(v, f (Exp $ Match x v)) | v <- variants]
+
+match :: forall f. Matching f f => f -> f
+match f = mkTup @f @f (match' @f @f f) id
+
+class (Elt (ResultT a), a ~ FnRep a (Exp (ResultT a))) => Matching f a where
+  type ResultT a
+  type Args    a
+  type FnRep   a t
+  --
+  match' :: a -> Args a -> Exp (ResultT a)
+  mkTup  :: (Args f -> b) -> (Args a -> Args f) -> FnRep a b
+
+
+instance (Elt e, Matching f a) => Matching f (Exp e -> a) where
+  type ResultT (Exp e -> a)   = ResultT a
+  type Args    (Exp e -> a)   = (Exp e, Args a)
+  type FnRep   (Exp e -> a) t = Exp e -> FnRep a t
+  --
+  mkTup f h x = mkTup @f @a f (h . (x,))
+  match' f (x, xs) | Just vs <- variants, Just m <- mask = Exp . Jump m x $
+    [ (v, match' @f (f (Exp $ Match x v)) xs) | v <- vs]
+                   | otherwise = match' @f (f x) xs
+
+instance Elt a => Matching f (Exp a) where
+  type ResultT (Exp a)   = a
+  type Args    (Exp a)   = ()
+  type FnRep   (Exp a) t = t
+  --
+  mkTup f h = f (h ())
+  match' x () = x
 
 
 -- Embedded expressions of the surface language
@@ -594,12 +626,12 @@ deriving instance Typeable Exp
 -- the type of collective array operations.
 --
 data PreExp acc exp t where
-  Match         :: Emb t
+  Match         :: Elt t
                 => exp t
                 -> TagIx t
                 -> PreExp acc exp t
 
-  Jump          :: (Emb arg, Elt t)
+  Jump          :: (Elt arg, Elt t)
                 => Mask arg
                 -> exp arg
                 -> [(TagIx arg, exp t)]

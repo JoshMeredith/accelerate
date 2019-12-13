@@ -59,6 +59,8 @@ module Data.Array.Accelerate.Array.Sugar (
   -- * Miscellaneous
   showShape, Foreign(..), sliceShape, enumSlices,
 
+  TagIx(..), Mask(..),
+
 ) where
 
 -- standard library
@@ -208,7 +210,10 @@ data Divide sh = Divide
 --
 -- > data Point = Point Int Float
 -- >   deriving (Show, Generic, Elt)
---
+
+data TagIx a = TagIx Int
+data Mask  a = Mask  Int
+
 class (Show a, Typeable a, Typeable (EltRepr a), ArrayElt (EltRepr a)) => Elt a where
   -- | Type representation mapping, which explains how to convert a type from
   -- the surface type into the internal representation type consisting only of
@@ -220,6 +225,12 @@ class (Show a, Typeable a, Typeable (EltRepr a), ArrayElt (EltRepr a)) => Elt a 
   eltType  :: TupleType (EltRepr a)
   fromElt  :: a -> EltRepr a
   toElt    :: EltRepr a -> a
+
+  variants :: Maybe [TagIx a]
+  mask     :: Maybe (Mask a)
+
+  variants = Nothing
+  mask     = Nothing
 
   {-# INLINE eltType #-}
   default eltType

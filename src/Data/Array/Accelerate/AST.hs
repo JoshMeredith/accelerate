@@ -16,6 +16,7 @@
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE UnboxedTuples         #-}
+{-# LANGUAGE DataKinds, PolyKinds #-}
 {-# OPTIONS_HADDOCK hide #-}
 -- |
 -- Module      : Data.Array.Accelerate.AST
@@ -114,7 +115,7 @@ module Data.Array.Accelerate.AST (
   -- debugging
   showPreAccOp, showPreExpOp,
 
-  Emb(..), TagIx(..), Mask(..),
+  TagIx(..), Mask(..),
 
 ) where
 
@@ -838,14 +839,6 @@ type PreExp acc = PreOpenExp acc ()
 type Exp = OpenExp ()
 
 
-data TagIx a = TagIx Int
-data Mask  a = Mask  Int
-
-class Elt a => Emb a where
-  variants :: [TagIx a]
-  mask :: Mask a
-
-
 -- |Parametrised open expressions using de Bruijn indices for variables ranging over tuples
 -- of scalars and arrays of tuples.  All code, except Cond, is evaluated eagerly.  N-tuples are
 -- represented as nested pairs.
@@ -853,12 +846,12 @@ class Elt a => Emb a where
 -- The data type is parametrised over the surface types (not the representation type).
 --
 data PreOpenExp acc env aenv t where
-  Match         :: Emb t
+  Match         :: Elt t
                 => PreOpenExp acc env aenv t
                 -> TagIx t
                 -> PreOpenExp acc env aenv t
 
-  Jump          :: (Emb arg, Elt t)
+  Jump          :: Elt t
                 => Mask arg
                 -> PreOpenExp acc env aenv arg
                 -> [(TagIx arg, PreOpenExp acc env aenv t)]
