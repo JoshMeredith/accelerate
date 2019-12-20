@@ -409,9 +409,8 @@ rebuildPreOpenExp k v av exp =
     Foreign ff f e      -> Foreign ff f <$> rebuildPreOpenExp k v av e
     Coerce e            -> Coerce       <$> rebuildPreOpenExp k v av e
   where
-    rebuildEqn :: forall arg.
-                    (TagIx arg, PreOpenExp acc env  aenv  t)
-               -> f (TagIx arg, PreOpenExp acc env' aenv' t)
+    rebuildEqn ::   (TagIx, PreOpenExp acc env  aenv  t)
+               -> f (TagIx, PreOpenExp acc env' aenv' t)
     rebuildEqn (ix, e) = (\x -> (ix, x)) <$> rebuildPreOpenExp k v av e
 
 

@@ -59,7 +59,7 @@ module Data.Array.Accelerate.Array.Sugar (
   -- * Miscellaneous
   showShape, Foreign(..), sliceShape, enumSlices,
 
-  TagIx(..), Mask(..),
+  TagIx(..), Mask(..), VarMask(..),
 
 ) where
 
@@ -84,6 +84,8 @@ import Data.Array.Accelerate.Orphans                            ()
 import Data.Array.Accelerate.Product
 import Data.Array.Accelerate.Type
 import qualified Data.Array.Accelerate.Array.Representation     as Repr
+
+import {-# SOURCE #-} qualified Data.Array.Accelerate.Smart     as Smart
 
 -- $setup
 -- >>> :seti -XOverloadedLists
@@ -211,8 +213,9 @@ data Divide sh = Divide
 -- > data Point = Point Int Float
 -- >   deriving (Show, Generic, Elt)
 
-data TagIx a = TagIx Int
-data Mask  a = Mask  Int
+data TagIx   = TagIx   Int [TagIx]   deriving (Show)
+data Mask    = Mask    Int [VarMask] deriving (Show)
+data VarMask = VarMask Int [Mask]    deriving (Show)
 
 class (Show a, Typeable a, Typeable (EltRepr a), ArrayElt (EltRepr a)) => Elt a where
   -- | Type representation mapping, which explains how to convert a type from
@@ -226,11 +229,9 @@ class (Show a, Typeable a, Typeable (EltRepr a), ArrayElt (EltRepr a)) => Elt a 
   fromElt  :: a -> EltRepr a
   toElt    :: EltRepr a -> a
 
-  variants :: Maybe [TagIx a]
-  mask     :: Maybe (Mask a)
+  vary :: Smart.Exp a -> Maybe (Mask, [(TagIx, Smart.Exp a)])
 
-  variants = Nothing
-  mask     = Nothing
+  vary = const Nothing
 
   {-# INLINE eltType #-}
   default eltType

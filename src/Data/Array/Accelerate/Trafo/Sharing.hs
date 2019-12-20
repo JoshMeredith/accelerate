@@ -710,7 +710,7 @@ convertSharingExp config lyt alyt env aenv exp@(ScopedExp lams _) = cvt exp
           Foreign ff f e        -> AST.Foreign ff (convertFunWith config f) (cvt e)
           Coerce e              -> AST.Coerce (cvt e)
 
-    cvtEqn :: forall arg t'. Elt t' => (TagIx arg, ScopedExp t') -> (TagIx arg, AST.OpenExp env aenv t')
+    cvtEqn :: forall t'. Elt t' => (TagIx, ScopedExp t') -> (TagIx, AST.OpenExp env aenv t')
     cvtEqn (ix, x) = (ix, cvt x)
 
     cvtA :: Arrays a => ScopedAcc a -> AST.OpenAcc aenv a
@@ -1695,8 +1695,8 @@ makeOccMapSharingExp config accOccMap expOccMap = travE
             Coerce e            -> reconstruct $ travE1 Coerce e
 
       where
-        travEqn :: (TagIx arg, Exp a)
-                -> IO ((TagIx arg, UnscopedExp a), Int)
+        travEqn ::     (TagIx, Exp a)
+                -> IO ((TagIx, UnscopedExp a), Int)
         travEqn (ix, e) = do (e', h) <- travE lvl e; return ((ix, e'), h)
 
         traverseAcc :: Typeable arrs => Level -> Acc arrs -> IO (UnscopedAcc arrs, Int)

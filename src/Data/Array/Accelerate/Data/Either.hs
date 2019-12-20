@@ -37,7 +37,7 @@ module Data.Array.Accelerate.Data.Either (
 import Data.Array.Accelerate.Analysis.Match
 import Data.Array.Accelerate.Array.Sugar                            hiding ( (!), shape, ignore, toIndex )
 import Data.Array.Accelerate.Language                               hiding ( chr )
-import Data.Array.Accelerate.Prelude                                hiding ( filter )
+import Data.Array.Accelerate.Prelude                                hiding ( filter, (++) )
 import Data.Array.Accelerate.Interpreter
 import Data.Array.Accelerate.Product
 import Data.Array.Accelerate.Smart
@@ -55,7 +55,7 @@ import Data.Array.Accelerate.Data.Semigroup
 
 import Data.Either                                                  ( Either(..) )
 import Data.Maybe
-import Prelude                                                      ( (.), ($), const, otherwise )
+import Prelude                                                      ( (.), ($), const, otherwise, (++) )
 
 
 -- | Lift a value into the 'Left' constructor
@@ -149,13 +149,40 @@ instance (Elt a, Elt b) => Elt (Either a b) where
   {-# INLINE eltType     #-}
   {-# INLINE [1] toElt   #-}
   {-# INLINE [1] fromElt #-}
-  variants = Just [TagIx 0, TagIx 1]
-  mask     = Just (Mask 2)
   eltType = eltType @(Word8,a,b)
   toElt ((((),0),a),_)  = Left  (toElt a)
   toElt (_         ,b)  = Right (toElt b)
   fromElt (Left a)      = ((((),0), fromElt a), fromElt (evalUndef @b))
   fromElt (Right b)     = ((((),1), fromElt (evalUndef @a)), fromElt b)
+  --
+  -- vary x = Just $ case (vary (fromLeft x), vary (fromRight x)) of
+  --   (Just (lm, lvs), Just (rm, rvs)) ->
+  --     (Mask 2 [VarMask [lm], VarMask [rm]], expsOf left 0 lvs ++ expsOf right 1 rvs)
+  --   (Just (lm, lvs), Nothing) ->
+  --     (Mask 2 [VarMask [lm], VarMask []  ], expsOf left 0 lvs ++ mkExp x 0         )
+  --   (Nothing, Just (rm, rvs)) ->
+  --     (Mask 2 [VarMask []  , VarMask [rm]], mkExp x 0         ++ expsOf right 0 rvs)
+  --   _ -> (Mask 2 [VarMask [], VarMask []], mkExp x 0 ++ mkExp x 1)
+  --   where
+  --     expsOf f n vs = [(TagIx n [t], Exp $ Match (f x') (TagIx n [t])) | (t, x') <- vs]
+  --     mkExp x' n = [(TagIx n [], Exp $ Match x' (TagIx n []))]
+
+  vary x = let
+      (lm, lvs) = fieldOfEither left  0 (fromLeft  x)
+      (rm, rvs) = fieldOfEither right 1 (fromRight x)
+    in
+      Just (Mask 2 [lm, rm], lvs ++ rvs)
+    where
+      fieldOfEither :: forall t. Elt t
+                    => (Exp t -> Exp (Either a b))
+                    -> Int
+                    -> Exp t
+                    -> (VarMask, [(TagIx, Exp (Either a b))])
+      fieldOfEither mk n a = case vary a of
+        Just (m, vs) -> (VarMask 1 [m], [ (TagIx n [t], Exp $ Match (mk x') (TagIx n [t])) | (t, x') <- vs ])
+        Nothing      -> (VarMask 1 [] , [ (TagIx n [ ], Exp $ Match x (TagIx n []))])
+
+{-# COMPLETE Left_, Right_ #-}
 
 pattern Left_ :: (Elt a, Elt b) => Exp a -> Exp (Either a b)
 pattern Left_ x <- (extractLeft -> Just x)
@@ -170,11 +197,13 @@ pattern Right_ x <- (extractRight -> Just x)
     Right_ = right
 
 extractLeft :: (Elt a, Elt b) => Exp (Either a b) -> Maybe (Exp a)
-extractLeft (Exp (Match xy (TagIx 0))) = Just (fromLeft xy)
+extractLeft (Exp (Match (Exp (Tuple (_ `SnocTup` x `SnocTup` _))) (TagIx 0 _))) = Just x
+extractLeft (Exp (Match xy (TagIx 0 _))) = Just (fromLeft xy)
 extractLeft _ = Nothing
 
 extractRight :: (Elt a, Elt b) => Exp (Either a b) -> Maybe (Exp b)
-extractRight (Exp (Match xy (TagIx 1))) = Just (fromRight xy)
+extractRight (Exp (Match (Exp (Tuple (_ `SnocTup` y))) (TagIx 1 _))) = Just y
+extractRight (Exp (Match xy (TagIx 1 _))) = Just (fromRight xy)
 extractRight _ = Nothing
 
 instance (Elt a, Elt b) => IsProduct Elt (Either a b) where

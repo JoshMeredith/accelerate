@@ -587,8 +587,8 @@ instance (Elt e, Matching f a) => Matching f (Exp e -> a) where
   type FnRep   (Exp e -> a) t = Exp e -> FnRep a t
   --
   mkTup f h x = mkTup @f @a f (h . (x,))
-  match' f (x, xs) | Just vs <- variants, Just m <- mask = Exp . Jump m x $
-    [ (v, match' @f (f (Exp $ Match x v)) xs) | v <- vs]
+  match' f (x, xs) | Just (m, vs) <- vary x = Exp . Jump m x $
+    [ (v, match' @f (f x') xs) | (v, x') <- vs]
                    | otherwise = match' @f (f x) xs
 
 instance Elt a => Matching f (Exp a) where
@@ -628,13 +628,13 @@ deriving instance Typeable Exp
 data PreExp acc exp t where
   Match         :: Elt t
                 => exp t
-                -> TagIx t
+                -> TagIx
                 -> PreExp acc exp t
 
   Jump          :: (Elt arg, Elt t)
-                => Mask arg
+                => Mask
                 -> exp arg
-                -> [(TagIx arg, exp t)]
+                -> [(TagIx, exp t)]
                 -> PreExp acc exp t
 
     -- Needed for conversion to de Bruijn form

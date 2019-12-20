@@ -259,7 +259,7 @@ shrinkPreAcc shrinkAcc reduceAcc = Stats.substitution "shrinkA" shrinkA
       Foreign ff f e            -> Foreign ff (shrinkF f) (shrinkE e)
       Coerce e                  -> Coerce (shrinkE e)
 
-    shrinkEqn :: (TagIx arg, PreOpenExp acc env aenv' t) -> (TagIx arg, PreOpenExp acc env aenv' t)
+    shrinkEqn :: (TagIx, PreOpenExp acc env aenv' t) -> (TagIx, PreOpenExp acc env aenv' t)
     shrinkEqn (ix, rhs) = (ix, shrinkE rhs)
 
     shrinkF :: PreOpenFun acc env aenv' f -> PreOpenFun acc env aenv' f
@@ -320,8 +320,8 @@ usesOfExp idx = countE
         | Just Refl <- match this idx   -> 1
         | otherwise                     -> 0
       --
-      Match e ix                -> undefined e ix
-      Jump m e js               -> undefined m e js
+      Match _e _ix                -> 1 --undefined e ix
+      Jump _m _e _js               -> 1 --undefined m e js
       Let bnd body              -> countE bnd + usesOfExp (SuccIdx idx) body
       Const _                   -> 0
       Undef                     -> 0

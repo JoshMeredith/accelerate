@@ -848,13 +848,13 @@ type Exp = OpenExp ()
 data PreOpenExp acc env aenv t where
   Match         :: Elt t
                 => PreOpenExp acc env aenv t
-                -> TagIx t
+                -> TagIx
                 -> PreOpenExp acc env aenv t
 
   Jump          :: Elt t
-                => Mask arg
+                => Mask
                 -> PreOpenExp acc env aenv arg
-                -> [(TagIx arg, PreOpenExp acc env aenv t)]
+                -> [(TagIx, PreOpenExp acc env aenv t)]
                 -> PreOpenExp acc env aenv t
 
   -- Local binding of a scalar expression
@@ -1303,12 +1303,18 @@ rnfPreOpenExp rnfA topExp =
       rnfE :: PreOpenExp acc env' aenv' t' -> ()
       rnfE = rnfPreOpenExp rnfA
 
-      rnfTE :: forall arg. (TagIx arg, PreOpenExp acc env aenv t) -> ()
-      rnfTE (TagIx i, x) = i `seq` rnfE x
+      rnfTE :: (TagIx, PreOpenExp acc env aenv t) -> ()
+      rnfTE (i, x) = rnfT i `seq` rnfE x
+
+      rnfT (TagIx n ts) = n `seq` foldl' (\() t -> rnfT t `seq` ()) () ts
+
+      rnfM (Mask n vms) = n `seq` foldl' (\() vm -> rnfVM vm `seq` ()) () vms
+
+      rnfVM (VarMask n ms) = n `seq` foldl' (\() m -> rnfM m `seq` ()) () ms
   in
   case topExp of
     Match x t                 -> rnfTE (t, x)
-    Jump (Mask i) e table     -> i `seq` rnfE e `seq` foldl' (\() x -> x `seq` ()) () (map rnfTE table)
+    Jump m e table            -> rnfM m `seq` rnfE e `seq` foldl' (\() x -> x `seq` ()) () (map rnfTE table)
     Let bnd body              -> rnfE bnd `seq` rnfE body
     Var ix                    -> rnfIdx ix
     Foreign asm f x           -> rnf (strForeign asm) `seq` rnfF f `seq` rnfE x
