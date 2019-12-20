@@ -34,11 +34,23 @@ printVary x = case vary x of
 fn :: Exp (Either (Either Int Int) ()) -> Exp Int
 fn = match go
   where
-    go (Left_  x) = x & match \case
+    go (Left_  x) = switch x \case
       Left_  y -> 2 + y
       Right_ y -> 3 + y
     go (Right_ _) = 0
     -- go _ = 5
+
+fn2 :: Exp (Either (Either Int Int) ()) -> Exp Int
+fn2 = match go
+  where
+    go (Left_  x) = case x of
+      Left_  y -> 2 + y
+      Right_ y -> 3 + y
+    go (Right_ _) = 0
+
+-- x = match g (if ... then Left_ (Left 0) else Right_ ())
+
+switch = flip match
 
 (&) = flip ($)
 
