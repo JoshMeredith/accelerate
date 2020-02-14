@@ -7,6 +7,7 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE PatternSynonyms, ViewPatterns #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- |
 -- Module      : Data.Array.Accelerate.Data.Maybe
@@ -25,6 +26,8 @@ module Data.Array.Accelerate.Data.Maybe (
   Maybe(..),
   just, nothing,
   maybe, isJust, isNothing, fromMaybe, fromJust, justs,
+
+  pattern Just_, pattern Nothing_,
 
 ) where
 
@@ -154,7 +157,41 @@ instance Elt a => Elt (Maybe a) where
   toElt (((),0),_) = Nothing
   toElt (_     ,x) = Just (toElt x)
   fromElt Nothing  = (((),0), fromElt (evalUndef @a))
-  fromElt (Just a) = (((),1), fromElt a)
+  fromElt (Just a) = let x = fromElt a in (((),1 + varElt @a x), x)
+  varElt (((), n), _) = n
+  --
+  -- vary x = Just $
+  --   case vary (fromJust x) of
+  --     Just (m, vs) -> common [m] [ (TagIx 1 [t], Exp $ Match (just x') (TagIx 1 [t])) | (t, x') <- vs ]
+  --     Nothing      -> common [] [ (TagIx 1 [], Exp $ Match x (TagIx 1 [])) ]
+  --   where
+  --     common m a = (Mask 2 [VarMask 0 [], VarMask 1 m], ((TagIx 0 [], Exp $ Match nothing (TagIx 0 [])) : a))
+  --
+  vary x =
+    Just (Mask 2 [VarMask 0 [], VarMask 1 [jm]], tagged 0 [] nothing : jvs)
+    where
+      (jm, avs) = varied (fromJust x)
+      jvs = [tagged 1 [t_a] (just a') | (t_a, a') <- avs]
+
+
+pattern Just_ :: Elt a => Exp a -> Exp (Maybe a)
+pattern Just_ x <- (extractJust -> Just x)
+  where
+    Just_ = just
+
+pattern Nothing_ :: Elt a => Exp (Maybe a)
+pattern Nothing_ <- (extractNothing -> True)
+  where
+    Nothing_ = nothing
+
+extractJust :: Elt a => Exp (Maybe a) -> Maybe (Exp a)
+extractJust (Exp (Match (Exp (Tuple (_ `SnocTup` x))) (TagIx 1 _))) = Just x
+extractJust (Exp (Match x (TagIx 1 _))) = Just (fromJust x)
+extractJust _ = Nothing
+
+extractNothing :: Elt a => Exp (Maybe a) -> Bool
+extractNothing (Exp (Match _ (TagIx 0 _))) = True
+extractNothing _ = False
 
 instance Elt a => IsProduct Elt (Maybe a) where
   type ProdRepr (Maybe a) = ProdRepr (Word8, a)

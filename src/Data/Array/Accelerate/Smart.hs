@@ -70,7 +70,7 @@ module Data.Array.Accelerate.Smart (
   -- Debugging
   showPreAccOp, showPreExpOp,
 
-  TagIx(..), Mask(..), match,
+  TagIx(..), Mask(..), match, tagged, varied, maskN, tagN, Matching(..),
 
 ) where
 
@@ -572,6 +572,40 @@ deriving instance Typeable Seq
 match :: forall f. Matching f f => f -> f
 match f = mkTup @f @f (match' @f @f f) id
 
+tagged :: Elt a => Int -> [TagIx] -> Exp a -> (TagIx, Exp a)
+tagged n ts x = (TagIx n ts, Exp $ Match x (TagIx n ts))
+
+maskN :: forall t. Elt t => Word8
+maskN = fromIntegral . maskSize . fst . varied @t $ undef
+
+tagN :: Mask -> TagIx -> Int
+tagN (Mask 1 [VarMask 0 []]) (TagIx 0 []) = 0
+tagN (Mask _ vms) (TagIx n ts) = previousN + prodIx (vms Prelude.!! n) ts
+  where
+    previousN = Prelude.sum $ map varMaskSize (take n vms)
+
+prodIx :: VarMask -> [TagIx] -> Int
+prodIx (VarMask _ vs) ts = snd $ foldl go (1, 0) (zip3 vs (reverse vs) ts)
+  where
+    go (m_acc, t_acc) (m_curr, m, t) = (m_acc * maskSize m, t_acc + m_acc * tagN m_curr t)
+
+maskSize :: Mask -> Int
+maskSize (Mask _ vars) = Prelude.sum (map varMaskSize vars)
+
+varMaskSize :: VarMask -> Int
+varMaskSize (VarMask 0 []) = 1
+varMaskSize (VarMask _ ms) = Prelude.sum (map maskSize ms)
+
+-- Equivalent to the mask that a single nullary contructor would have,
+-- essentially treating unknown/unmatchable types as unit.
+varied :: Elt a => Exp a -> (Mask, [(TagIx, Exp a)])
+varied x@(Exp (Match _ ix)) = case vary x of
+    Just (m, _) -> (m, [(ix, x)])
+    Nothing     -> error "pre-varied variant of unvariable value"
+varied x = case vary x of
+  Nothing -> (Mask 1 [VarMask 0 []], [(TagIx 0 [], x)])
+  Just m  -> m
+
 class (Elt (ResultT a), a ~ FnRep a (Exp (ResultT a))) => Matching f a where
   type ResultT a
   type Args    a
@@ -587,8 +621,9 @@ instance (Elt e, Matching f a) => Matching f (Exp e -> a) where
   type FnRep   (Exp e -> a) t = Exp e -> FnRep a t
   --
   mkTup f h x = mkTup @f @a f (h . (x,))
-  match' f (x, xs) | Just (m, vs) <- vary x = Exp . Jump m x $
-    [ (v, match' @f (f x') xs) | (v, x') <- vs]
+
+  match' f (x@(Exp (Match _ _)), xs) = match' @f (f x) xs
+  match' f (x, xs) | Just (m, vs) <- vary x = Exp . Jump m x $ [ (v, match' @f (f x') xs) | (v, x') <- vs]
                    | otherwise = match' @f (f x) xs
 
 instance Elt a => Matching f (Exp a) where
@@ -596,9 +631,8 @@ instance Elt a => Matching f (Exp a) where
   type Args    (Exp a)   = ()
   type FnRep   (Exp a) t = t
   --
-  mkTup f h = f (h ())
+  mkTup f h   = f (h ())
   match' x () = x
-
 
 -- Embedded expressions of the surface language
 -- --------------------------------------------

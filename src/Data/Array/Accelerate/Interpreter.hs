@@ -1,6 +1,8 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE FlexibleInstances   #-}
 {-# LANGUAGE GADTs               #-}
 {-# LANGUAGE MagicHash           #-}
 {-# LANGUAGE PatternGuards       #-}
@@ -12,6 +14,7 @@
 {-# LANGUAGE TypeFamilies        #-}
 {-# LANGUAGE TypeOperators       #-}
 {-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 {-# OPTIONS_HADDOCK prune #-}
 -- |
@@ -68,6 +71,8 @@ import System.IO.Unsafe                                             ( unsafePerf
 import Text.Printf                                                  ( printf )
 import Unsafe.Coerce
 import Prelude                                                      hiding ( (!!), sum )
+import Data.List                                                    ( find )
+import Data.Maybe
 
 -- friends
 import Data.Array.Accelerate.AST                                    hiding ( Boundary, PreBoundary(..) )
@@ -921,6 +926,12 @@ evalPreOpenFun evalAcc (Body e) env aenv = evalPreOpenExp evalAcc e env aenv
 evalPreOpenFun evalAcc (Lam f)  env aenv =
   \x -> evalPreOpenFun evalAcc f (env `PushElt` fromElt x) aenv
 
+-- varElt :: forall t. Elt t => EltRepr t -> Int
+-- varElt (_, n) | Just Refl <- matchTag @t = undefined
+-- varElt = undefined
+
+-- matchTag :: forall t a. Elt t => Maybe (t :~: (a, Word8))
+-- matchTag = undefined
 
 -- Evaluate an open scalar expression
 --
@@ -950,9 +961,12 @@ evalPreOpenExp evalAcc pexp env aenv =
   in
   case pexp of
 
-    Match{} -> undefined
-    Jump{}  -> undefined
-
+    Match e _ix                 -> evalE e
+    Jump m (x :: PreOpenExp c v w arg) js -> let arg = fromElt $ evalE x
+                                                 jumps = map (\(tag, exp) -> (Smart.tagN m tag, exp)) js
+                                                 n = fromIntegral $ varElt @arg arg
+                                                 e = fromJust $ find ((== n) . fst) jumps
+                                             in evalE (snd e)
     Let exp1 exp2               -> let !v1  = evalE exp1
                                        env' = env `PushElt` fromElt v1
                                    in  evalPreOpenExp evalAcc exp2 env' aenv

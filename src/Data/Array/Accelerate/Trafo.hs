@@ -56,7 +56,7 @@ module Data.Array.Accelerate.Trafo (
 import Control.DeepSeq
 import Data.Typeable
 
-import Data.Array.Accelerate.Smart
+import Data.Array.Accelerate.Smart                      as Smart
 import Data.Array.Accelerate.Array.Sugar                ( Arrays, Elt )
 import Data.Array.Accelerate.Trafo.Base                 ( Match(..), matchDelayedOpenAcc, encodeDelayedOpenAcc )
 import Data.Array.Accelerate.Trafo.Config

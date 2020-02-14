@@ -56,6 +56,7 @@ import Data.Array.Accelerate.Data.Semigroup
 import Data.Either                                                  ( Either(..) )
 import Data.Maybe
 import Prelude                                                      ( (.), ($), const, otherwise, (++) )
+import qualified Prelude
 
 
 -- | Lift a value into the 'Left' constructor
@@ -150,10 +151,10 @@ instance (Elt a, Elt b) => Elt (Either a b) where
   {-# INLINE [1] toElt   #-}
   {-# INLINE [1] fromElt #-}
   eltType = eltType @(Word8,a,b)
-  toElt ((((),0),a),_)  = Left  (toElt a)
+  toElt ((((),n),a),_) | n Prelude.< maskN @a = Left  (toElt a)
   toElt (_         ,b)  = Right (toElt b)
-  fromElt (Left a)      = ((((),0), fromElt a), fromElt (evalUndef @b))
-  fromElt (Right b)     = ((((),1), fromElt (evalUndef @a)), fromElt b)
+  fromElt (Left a)      = let x = fromElt a in ((((),varElt @a x), x), fromElt (evalUndef @b))
+  fromElt (Right b)     = let y = fromElt b in ((((),maskN @a + varElt @b y), fromElt (evalUndef @a)), y)
   --
   -- vary x = Just $ case (vary (fromLeft x), vary (fromRight x)) of
   --   (Just (lm, lvs), Just (rm, rvs)) ->
@@ -166,21 +167,31 @@ instance (Elt a, Elt b) => Elt (Either a b) where
   --   where
   --     expsOf f n vs = [(TagIx n [t], Exp $ Match (f x') (TagIx n [t])) | (t, x') <- vs]
   --     mkExp x' n = [(TagIx n [], Exp $ Match x' (TagIx n []))]
-
-  vary x = let
-      (lm, lvs) = fieldOfEither left  0 (fromLeft  x)
-      (rm, rvs) = fieldOfEither right 1 (fromRight x)
-    in
-      Just (Mask 2 [lm, rm], lvs ++ rvs)
+  --
+  -- vary x = let
+  --     (lm, lvs) = fieldOfEither left  0 (fromLeft  x)
+  --     (rm, rvs) = fieldOfEither right 1 (fromRight x)
+  --   in
+  --     Just (Mask 2 [lm, rm], lvs ++ rvs)
+  --   where
+  --     fieldOfEither :: forall t. Elt t
+  --                   => (Exp t -> Exp (Either a b))
+  --                   -> Int
+  --                   -> Exp t
+  --                   -> (VarMask, [(TagIx, Exp (Either a b))])
+  --     fieldOfEither mk n a = case vary a of
+  --       Just (m, vs) -> (VarMask 1 [m], [ (TagIx n [t], Exp $ Match (mk x') (TagIx n [t])) | (t, x') <- vs ])
+  --       Nothing      -> (VarMask 1 [] , [ (TagIx n [ ], Exp $ Match x (TagIx n []))])
+  --
+  vary x =
+    Just (Mask 2 [VarMask 1 [lm], VarMask 1 [rm]], lvs ++ rvs)
     where
-      fieldOfEither :: forall t. Elt t
-                    => (Exp t -> Exp (Either a b))
-                    -> Int
-                    -> Exp t
-                    -> (VarMask, [(TagIx, Exp (Either a b))])
-      fieldOfEither mk n a = case vary a of
-        Just (m, vs) -> (VarMask 1 [m], [ (TagIx n [t], Exp $ Match (mk x') (TagIx n [t])) | (t, x') <- vs ])
-        Nothing      -> (VarMask 1 [] , [ (TagIx n [ ], Exp $ Match x (TagIx n []))])
+      (lm, avs) = varied (fromLeft  x)
+      (rm, bvs) = varied (fromRight x)
+      lvs = [tagged 0 [t_a] (left  a') | (t_a, a') <- avs]
+      rvs = [tagged 1 [t_b] (right b') | (t_b, b') <- bvs]
+
+  varElt ((((), n), _), _) = n
 
 {-# COMPLETE Left_, Right_ #-}
 

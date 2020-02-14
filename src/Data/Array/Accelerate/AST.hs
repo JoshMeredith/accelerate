@@ -851,7 +851,7 @@ data PreOpenExp acc env aenv t where
                 -> TagIx
                 -> PreOpenExp acc env aenv t
 
-  Jump          :: Elt t
+  Jump          :: (Elt t, Elt arg)
                 => Mask
                 -> PreOpenExp acc env aenv arg
                 -> [(TagIx, PreOpenExp acc env aenv t)]

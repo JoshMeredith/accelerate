@@ -230,8 +230,10 @@ class (Show a, Typeable a, Typeable (EltRepr a), ArrayElt (EltRepr a)) => Elt a 
   toElt    :: EltRepr a -> a
 
   vary :: Smart.Exp a -> Maybe (Mask, [(TagIx, Smart.Exp a)])
+  varElt :: EltRepr a -> Word8
 
   vary = const Nothing
+  varElt _ = 0
 
   {-# INLINE eltType #-}
   default eltType
@@ -252,7 +254,6 @@ class (Show a, Typeable a, Typeable (EltRepr a), ArrayElt (EltRepr a)) => Elt a 
     => EltRepr a
     -> a
   toElt = to . snd . gtoElt @(Rep a) @()
-
 
 class GElt f where
   type GEltRepr t f
@@ -373,7 +374,7 @@ instance Shape sh => Elt (Any (sh:.Int)) where
   fromElt _     = (fromElt (Any @sh), ())
   toElt _       = Any
 
-instance (Elt a, Elt b) => Elt (a, b)
+instance (Elt a, Elt b) => Elt (a, b) where
 instance (Elt a, Elt b, Elt c) => Elt (a, b, c)
 instance (Elt a, Elt b, Elt c, Elt d) => Elt (a, b, c, d)
 instance (Elt a, Elt b, Elt c, Elt d, Elt e) => Elt (a, b, c, d, e)

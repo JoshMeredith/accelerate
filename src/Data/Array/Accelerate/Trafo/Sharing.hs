@@ -1254,14 +1254,14 @@ makeOccMapSharingAcc
     -> IO (UnscopedAcc arrs, Int)
 makeOccMapSharingAcc config accOccMap = traverseAcc
   where
-    traverseFun1 :: (Elt a, Typeable b) => Level -> (Exp a -> Exp b) -> IO (Exp a -> RootExp b, Int)
-    traverseFun1 = makeOccMapFun1 config accOccMap
+    traverseFun1 :: (Elt a, Elt b, Typeable b) => Level -> (Exp a -> Exp b) -> IO (Exp a -> RootExp b, Int)
+    traverseFun1 lvl = makeOccMapFun1 config accOccMap lvl . match
 
-    traverseFun2 :: (Elt a, Elt b, Typeable c)
+    traverseFun2 :: (Elt a, Elt b, Elt c, Typeable c)
                  => Level
                  -> (Exp a -> Exp b -> Exp c)
                  -> IO (Exp a -> Exp b -> RootExp c, Int)
-    traverseFun2 = makeOccMapFun2 config accOccMap
+    traverseFun2 lvl = makeOccMapFun2 config accOccMap lvl . match
 
     traverseAfun1 :: (Arrays a, Typeable b) => Level -> (Acc a -> Acc b) -> IO (Acc a -> UnscopedAcc b, Int)
     traverseAfun1 = makeOccMapAfun1 config accOccMap
@@ -1427,7 +1427,7 @@ makeOccMapSharingAcc config accOccMap = traverseAcc
               (acc', h2) <- traverseAcc lvl acc
               return (c exp' acc', h1 `max` h2 + 1)
 
-        travF2A :: (Elt b, Elt c, Typeable d, Arrays arrs')
+        travF2A :: (Elt b, Elt c, Elt d, Typeable d, Arrays arrs')
                 => ((Exp b -> Exp c -> RootExp d) -> UnscopedAcc arrs'
                     -> PreAcc UnscopedAcc RootExp arrs)
                 -> (Exp b -> Exp c -> Exp d) -> Acc arrs'
@@ -1438,7 +1438,7 @@ makeOccMapSharingAcc config accOccMap = traverseAcc
               (acc', h2) <- traverseAcc lvl acc
               return (c fun' acc', h1 `max` h2 + 1)
 
-        travF2EA :: (Elt b, Elt c, Typeable d, Typeable e, Arrays arrs')
+        travF2EA :: (Elt b, Elt c, Elt d, Typeable d, Typeable e, Arrays arrs')
                  => ((Exp b -> Exp c -> RootExp d) -> RootExp e -> UnscopedAcc arrs' -> PreAcc UnscopedAcc RootExp arrs)
                  -> (Exp b -> Exp c -> Exp d) -> Exp e -> Acc arrs'
                  -> IO (PreAcc UnscopedAcc RootExp arrs, Int)
@@ -1449,7 +1449,7 @@ makeOccMapSharingAcc config accOccMap = traverseAcc
               (acc', h3) <- traverseAcc lvl acc
               return (c fun' exp' acc', h1 `max` h2 `max` h3 + 1)
 
-        travF2A2 :: (Elt b, Elt c, Typeable d, Arrays arrs1, Arrays arrs2)
+        travF2A2 :: (Elt b, Elt c, Elt d, Typeable d, Arrays arrs1, Arrays arrs2)
                  => ((Exp b -> Exp c -> RootExp d) -> UnscopedAcc arrs1 -> UnscopedAcc arrs2 -> PreAcc UnscopedAcc RootExp arrs)
                  -> (Exp b -> Exp c -> Exp d) -> Acc arrs1 -> Acc arrs2
                  -> IO (PreAcc UnscopedAcc RootExp arrs, Int)
