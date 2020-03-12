@@ -280,7 +280,7 @@ convertOpenExp :: Config -> OpenExp env aenv t -> DelayedOpenExp env aenv t
 convertOpenExp config exp =
   case exp of
     Match e ix              -> Match (cvtE e) ix
-    Jump m e js             -> Jump m (cvtE e) (Prelude.map cvtEqn js)
+    Jump  e js              -> Jump  (cvtE e) (Prelude.map cvtEqn js)
 
     Let bnd body            -> Let (cvtE bnd) (cvtE body)
     Var ix                  -> Var ix

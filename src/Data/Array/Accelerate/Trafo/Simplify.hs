@@ -222,8 +222,8 @@ simplifyOpenExp env = first getAny . cvtE
           env'  = env `pushExp` snd bnd'
           body' = cvtE' (incExp env') body
 
-      Match e ix  -> pure $ Match e ix
-      Jump m e js -> pure $ Jump m e js
+      Match e ix -> pure $ Match e ix
+      Jump  e js -> pure $ Jump  e js
 
       Var ix                    -> pure $ Var ix
       Const c                   -> pure $ Const c

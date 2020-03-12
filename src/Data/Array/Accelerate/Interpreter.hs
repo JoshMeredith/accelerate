@@ -962,8 +962,8 @@ evalPreOpenExp evalAcc pexp env aenv =
   case pexp of
 
     Match e _ix                 -> evalE e
-    Jump m (x :: PreOpenExp c v w arg) js -> let arg = fromElt $ evalE x
-                                                 jumps = map (\(tag, exp) -> (Smart.tagN m tag, exp)) js
+    Jump (x :: PreOpenExp c v w arg) js -> let   arg = fromElt $ evalE x
+                                                 jumps = map (\(tag, exp) -> (Smart.tagN (eltMask @arg) tag, exp)) js
                                                  n = fromIntegral $ varElt @arg arg
                                                  e = fromJust $ find ((== n) . fst) jumps
                                              in evalE (snd e)

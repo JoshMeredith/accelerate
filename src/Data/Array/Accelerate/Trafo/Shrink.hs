@@ -97,7 +97,7 @@ shrinkExp = Stats.substitution "shrinkE" . first getAny . shrinkE
             _ -> "inline exp"   -- forced inlining when lIMIT > 1
       --
       Match e ix                -> Match <$> shrinkE e <*> pure ix
-      Jump m e js               -> Jump m <$> shrinkE e <*> pure js -- TODO-SUMS: Needs a proper implementation eventually
+      Jump  e js                -> Jump  <$> shrinkE e <*> pure js -- TODO-SUMS: Needs a proper implementation eventually
       Var idx                   -> pure (Var idx)
       Const c                   -> pure (Const c)
       Undef                     -> pure Undef
@@ -230,7 +230,7 @@ shrinkPreAcc shrinkAcc reduceAcc = Stats.substitution "shrinkA" shrinkA
     shrinkE :: PreOpenExp acc env aenv' t -> PreOpenExp acc env aenv' t
     shrinkE exp = case exp of
       Match e ix                -> Match (shrinkE e) ix
-      Jump m e js               -> Jump m (shrinkE e) (map shrinkEqn js)
+      Jump  e js                -> Jump  (shrinkE e) (map shrinkEqn js)
       Let bnd body              -> Let (shrinkE bnd) (shrinkE body)
       Var idx                   -> Var idx
       Const c                   -> Const c
@@ -320,8 +320,9 @@ usesOfExp idx = countE
         | Just Refl <- match this idx   -> 1
         | otherwise                     -> 0
       --
-      Match _e _ix                -> 1 --undefined e ix
-      Jump _m _e _js               -> 1 --undefined m e js
+      -- TODO PATTERNS
+      Match _e _ix              -> 1 --undefined e ix
+      Jump  _e _js              -> 1 --undefined m e js
       Let bnd body              -> countE bnd + usesOfExp (SuccIdx idx) body
       Const _                   -> 0
       Undef                     -> 0
@@ -416,8 +417,9 @@ usesOfPreAcc withShape countAcc idx = count
 
     countE :: PreOpenExp acc env aenv e -> Int
     countE exp = case exp of
+      -- TODO PATTERNS
       Match e ix                -> undefined e ix
-      Jump m e js               -> undefined m e js
+      Jump  e js                -> undefined e js
       Let bnd body              -> countE bnd + countE body
       Var _                     -> 0
       Const _                   -> 0

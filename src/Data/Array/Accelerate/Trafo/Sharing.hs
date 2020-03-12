@@ -682,7 +682,7 @@ convertSharingExp config lyt alyt env aenv exp@(ScopedExp lams _) = cvt exp
       = case pexp of
 
           Match e ix      -> AST.Match (cvt e) ix
-          Jump  mask x es -> AST.Jump  mask (cvt x) (map cvtEqn es)
+          Jump  x es      -> AST.Jump  (cvt x) (map cvtEqn es)
 
 
           Tag i                 -> AST.Var (prjIdx ("de Bruijn conversion tag " ++ show i) i lyt)
@@ -1656,10 +1656,10 @@ makeOccMapSharingExp config accOccMap expOccMap = travE
                                       (e', h) <- travE lvl e
                                       return (Match e' ix, h+1)
 
-            Jump m e js         -> reconstruct $ do -- TODO-SUMS: Is this correct?
+            Jump  e js          -> reconstruct $ do -- TODO-SUMS: Is this correct?
                                       (e', h) <- travE lvl e
                                       (js', hs) <- unzip <$> mapM travEqn js
-                                      return (Jump m e' js', maximum (h:hs) + 1)
+                                      return (Jump e' js', maximum (h:hs) + 1)
 
             Tag i               -> reconstruct $ return (Tag i, 0)      -- height is 0!
             Const c             -> reconstruct $ return (Const c, 1)
@@ -2535,10 +2535,10 @@ determineScopesSharingExp config accOccMap expOccMap = scopesExp
       = case pexp of
           Match e ix            -> let (e', accCount) = scopesExp e
                                    in reconstruct (Match e' ix) accCount
-          Jump m e js           -> let
+          Jump  e js            -> let
                                      (e', accCount ) = scopesExp e -- TODO-SUMS: is this correct?
                                      (es, accCount') = foldr travEqn ([], accCount) js
-                                   in reconstruct (Jump m e' es) accCount'
+                                   in reconstruct (Jump e' es) accCount'
 
           Tag i                 -> reconstruct (Tag i) noNodeCounts
           Const c               -> reconstruct (Const c) noNodeCounts

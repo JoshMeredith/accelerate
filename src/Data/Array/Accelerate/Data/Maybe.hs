@@ -167,11 +167,11 @@ instance Elt a => Elt (Maybe a) where
   --   where
   --     common m a = (Mask 2 [VarMask 0 [], VarMask 1 m], ((TagIx 0 [], Exp $ Match nothing (TagIx 0 [])) : a))
   --
+  eltMask = Mask [[], [eltMask @a]]
   vary x =
-    Just (Mask 2 [VarMask 0 [], VarMask 1 [jm]], tagged 0 [] nothing : jvs)
+    Just (tagged 0 [] nothing : jvs)
     where
-      (jm, avs) = varied (fromJust x)
-      jvs = [tagged 1 [t_a] (just a') | (t_a, a') <- avs]
+      jvs = [tagged 1 [t_a] (just a') | (t_a, a') <- varied (fromJust x)]
 
 
 pattern Just_ :: Elt a => Exp a -> Exp (Maybe a)

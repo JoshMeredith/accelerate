@@ -1,9 +1,10 @@
-{-# LANGUAGE MagicHash, FlexibleContexts, BlockArguments, LambdaCase, DeriveGeneric, DeriveAnyClass, MultiParamTypeClasses, TypeFamilies, PatternSynonyms, ViewPatterns, UndecidableInstances, TypeApplications, ScopedTypeVariables #-}
+{-# LANGUAGE MagicHash, FlexibleContexts, BlockArguments, LambdaCase, DeriveGeneric, DeriveAnyClass, MultiParamTypeClasses, TypeFamilies, PatternSynonyms, ViewPatterns, UndecidableInstances, TypeApplications, ScopedTypeVariables, RebindableSyntax #-}
 {-# OPTIONS_GHC -Wall #-}
 
 module Test where
 
-import Data.Array.Accelerate as A
+import qualified Data.Array.Accelerate as A
+import Data.Array.Accelerate (unlift)
 import Data.Array.Accelerate.Data.Either
 import Data.Array.Accelerate.Data.Maybe
 -- import Data.Array.Accelerate.Smart (match)
@@ -12,6 +13,11 @@ import Data.Array.Accelerate.Interpreter
 import Data.Array.Accelerate.Array.Sugar
 import Data.Array.Accelerate.Smart
 import Data.Array.Accelerate.Product
+
+
+import Prelude
+import GHC.Generics
+import Data.Word
 
 main :: IO ()
 main = do
@@ -24,12 +30,12 @@ main = do
   print . run $ A.map hybrid2 hybrid2s
 
 
-printVary :: Elt t => Exp t -> IO ()
+printVary :: forall t. Elt t => Exp t -> IO ()
 printVary x = case vary x of
   Nothing -> print "No variants"
-  Just (m, vs) -> do
+  Just vs -> do
     putStrLn "------"
-    print m
+    print (eltMask @t)
     putStrLn "---"
     mapM_ (\(t, e) -> print t >> print e >> putStrLn "---") vs
     putStrLn "------"
@@ -118,24 +124,15 @@ mkDuo :: (Elt a, Elt b) => Exp a -> Exp b -> Exp (Duo a b)
 mkDuo x1 x2 = Exp . Tuple $ NilTup `SnocTup` x1 `SnocTup` x2
 
 instance (Elt a, Elt b) => Elt (Duo a b) where
+  eltMask = Mask [[eltMask @a, eltMask @b]]
   vary x =
     let
-      (x1, x2 ) = unduo x
-      (m1, vs1) = go x1
-      (m2, vs2) = go x2
+      (x1, x2) = unduo x
     in
-      Just ( Mask 1 [VarMask 2 [m1, m2]]
-           , [ ( TagIx 0 [t1, t2]
-               , Exp $ Match (mkDuo x1' x2') (TagIx 0 [t1, t2])
-               )
-             | (t1, x1') <- vs1
-             , (t2, x2') <- vs2
+      Just [ tagged 0 [t1, t2] (mkDuo x1' x2')
+             | (t1, x1') <- varied x1
+             , (t2, x2') <- varied x2
              ]
-           )
-    where
-      go e = case vary e of
-        Just (m, vs) -> (m, vs)
-        Nothing      -> (Mask 1 [], [(TagIx 0 [], e)])
 
 {-# COMPLETE Duo_ #-}
 pattern Duo_ :: (Elt a, Elt b) => Exp a -> Exp b -> Exp (Duo a b)
@@ -171,17 +168,13 @@ instance (Elt a, Elt b, Elt c) => Elt (Hybrid a b c) where
                       in (((((), 1 + maskN @a + varElt @b y * maskN @c + varElt @c z), fromElt (evalUndef @a)), y), z)
   --
   varElt (((((), n), _), _), _) = n
-  vary x = Just $ ( Mask 3 [VarMask 0 [], VarMask 1 [m_a], VarMask 2 [m_b, m_c]]
-                  , concat [h0, h1, h2]
-                  )
+  eltMask = Mask [[], [eltMask @a], [eltMask @b, eltMask @c]]
+  vary x = Just $ concat [h0, h1, h2]
     where
       (b, c) = fromHybrid2 x
-      (m_a, vs_a) = varied (fromHybrid1 x)
-      (m_b, vs_b) = varied b
-      (m_c, vs_c) = varied c
       h0 = [tagged 0 [] (mkHybrid0 @a @b @c)]
-      h1 = [tagged 1 [t_a] (mkHybrid1 @a @b @c a') | (t_a, a') <- vs_a]
-      h2 = [tagged 2 [t_b, t_c] (mkHybrid2 @a @b @c b' c') | (t_b, b') <- vs_b, (t_c, c') <- vs_c]
+      h1 = [tagged 1 [t_a] (mkHybrid1 @a @b @c a') | (t_a, a') <- varied (fromHybrid1 x)]
+      h2 = [tagged 2 [t_b, t_c] (mkHybrid2 @a @b @c b' c') | (t_b, b') <- varied b, (t_c, c') <- varied c]
 
 mkHybrid0 :: (Elt a, Elt b, Elt c) => Exp (Hybrid a b c)
 mkHybrid0 = Exp . Tuple $ NilTup `SnocTup` constant 0 `SnocTup` undef `SnocTup` undef `SnocTup` undef
@@ -248,7 +241,7 @@ hybrid2 (Left_ (Two_ b c)) = 0 + 1 + b + c
 hybrid2 (Right_ _) = 1
 
 hybrid2s :: Acc (Vector (Either (Hybrid Int Int Int) ()))
-hybrid2s = use $ fromList (Z :. 4) [Left Zero, Left (One 1), Left (Two 2 3), Right ()]
+hybrid2s = A.use $ A.fromList (Z :. 4) [Left Zero, Left (One 1), Left (Two 2 3), Right ()]
 
 f100 :: Exp (Either (Either Int Int) ()) -> Exp Int
 f100 = match go
@@ -261,6 +254,12 @@ g100 = match go
   where
     go (Left_ _) = 0
     go (Right_ _) = 1
+
+
+literal :: Exp Int -> Exp Bool
+literal 0 = constant True
+literal _ = constant False
+
 
 -- *Test> f100
 -- \x0 ->
@@ -305,3 +304,8 @@ g100 = match go
 --   (Tag 1 [ ] -> 100)
 --   ]
 -- *Test>
+
+
+
+example :: Exp (Int, Int) -> Exp Int
+example (unlift -> (_x :: Exp a, _y :: Exp a)) = 1

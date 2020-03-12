@@ -852,8 +852,7 @@ data PreOpenExp acc env aenv t where
                 -> PreOpenExp acc env aenv t
 
   Jump          :: (Elt t, Elt arg)
-                => Mask
-                -> PreOpenExp acc env aenv arg
+                => PreOpenExp acc env aenv arg
                 -> [(TagIx, PreOpenExp acc env aenv t)]
                 -> PreOpenExp acc env aenv t
 
@@ -1307,14 +1306,10 @@ rnfPreOpenExp rnfA topExp =
       rnfTE (i, x) = rnfT i `seq` rnfE x
 
       rnfT (TagIx n ts) = n `seq` foldl' (\() t -> rnfT t `seq` ()) () ts
-
-      rnfM (Mask n vms) = n `seq` foldl' (\() vm -> rnfVM vm `seq` ()) () vms
-
-      rnfVM (VarMask n ms) = n `seq` foldl' (\() m -> rnfM m `seq` ()) () ms
   in
   case topExp of
     Match x t                 -> rnfTE (t, x)
-    Jump m e table            -> rnfM m `seq` rnfE e `seq` foldl' (\() x -> x `seq` ()) () (map rnfTE table)
+    Jump e table              -> rnfE e `seq` foldl' (\() x -> x `seq` ()) () (map rnfTE table)
     Let bnd body              -> rnfE bnd `seq` rnfE body
     Var ix                    -> rnfIdx ix
     Foreign asm f x           -> rnf (strForeign asm) `seq` rnfF f `seq` rnfE x
@@ -1571,7 +1566,7 @@ liftPreOpenExp liftA pexp =
   in
   case pexp of
     Match _ix _x              -> undefined
-    Jump _mask _x _table      -> undefined
+    Jump _x _table            -> undefined
     Let bnd body              -> [|| Let $$(liftPreOpenExp liftA bnd) $$(liftPreOpenExp liftA body) ||]
     Var ix                    -> [|| Var $$(liftIdx ix) ||]
     Foreign asm f x           -> [|| Foreign $$(liftForeign asm) $$(liftPreOpenFun liftA f) $$(liftE x) ||]

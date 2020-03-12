@@ -78,6 +78,7 @@ module Data.Array.Accelerate.Smart (
 import Prelude                                  hiding ( exp )
 import Data.Kind
 import Data.List
+import Data.Maybe
 import Data.Typeable
 
 -- friends
@@ -576,35 +577,28 @@ tagged :: Elt a => Int -> [TagIx] -> Exp a -> (TagIx, Exp a)
 tagged n ts x = (TagIx n ts, Exp $ Match x (TagIx n ts))
 
 maskN :: forall t. Elt t => Word8
-maskN = fromIntegral . maskSize . fst . varied @t $ undef
+maskN = fromIntegral . maskSize $ eltMask @t
 
 tagN :: Mask -> TagIx -> Int
-tagN (Mask 1 [VarMask 0 []]) (TagIx 0 []) = 0
-tagN (Mask _ vms) (TagIx n ts) = previousN + prodIx (vms Prelude.!! n) ts
+-- tagN (Mask 1 [VarMask 0 []]) (TagIx 0 []) = 0
+tagN (Mask vms) (TagIx n ts) = previousMasks + fieldsN (vms Prelude.!! n) ts
   where
-    previousN = Prelude.sum $ map varMaskSize (take n vms)
+    -- The total number of options in the previous constructors in this type
+    previousMasks = maskSize $ Mask (take n vms)
 
-prodIx :: VarMask -> [TagIx] -> Int
-prodIx (VarMask _ vs) ts = snd $ foldl go (1, 0) (zip3 vs (reverse vs) ts)
-  where
-    go (m_acc, t_acc) (m_curr, m, t) = (m_acc * maskSize m, t_acc + m_acc * tagN m_curr t)
+fieldsN :: [Mask] -> [TagIx] -> Int
+fieldsN [] [] = 0
+fieldsN (v:vms) (t:ts) = (tagN v t) * (max 1 (maskSize (Mask [vms]))) + fieldsN vms ts
+fieldsN _ _ = error "fieldsN: argument lists should be the same length"
 
 maskSize :: Mask -> Int
-maskSize (Mask _ vars) = Prelude.sum (map varMaskSize vars)
-
-varMaskSize :: VarMask -> Int
-varMaskSize (VarMask 0 []) = 1
-varMaskSize (VarMask _ ms) = Prelude.sum (map maskSize ms)
+maskSize (Mask vars) = Prelude.sum (map (Prelude.product . map maskSize) vars)
 
 -- Equivalent to the mask that a single nullary contructor would have,
 -- essentially treating unknown/unmatchable types as unit.
-varied :: Elt a => Exp a -> (Mask, [(TagIx, Exp a)])
-varied x@(Exp (Match _ ix)) = case vary x of
-    Just (m, _) -> (m, [(ix, x)])
-    Nothing     -> error "pre-varied variant of unvariable value"
-varied x = case vary x of
-  Nothing -> (Mask 1 [VarMask 0 []], [(TagIx 0 [], x)])
-  Just m  -> m
+varied :: forall a. Elt a => Exp a -> [(TagIx, Exp a)]
+varied x@(Exp (Match _ ix)) = [(ix, x)]
+varied x = fromMaybe [tagged 0 [] x] (vary x)
 
 class (Elt (ResultT a), a ~ FnRep a (Exp (ResultT a))) => Matching f a where
   type ResultT a
@@ -623,7 +617,7 @@ instance (Elt e, Matching f a) => Matching f (Exp e -> a) where
   mkTup f h x = mkTup @f @a f (h . (x,))
 
   match' f (x@(Exp (Match _ _)), xs) = match' @f (f x) xs
-  match' f (x, xs) | Just (m, vs) <- vary x = Exp . Jump m x $ [ (v, match' @f (f x') xs) | (v, x') <- vs]
+  match' f (x, xs) | Just vs <- vary x = Exp . Jump x $ [ (v, match' @f (f x') xs) | (v, x') <- vs]
                    | otherwise = match' @f (f x) xs
 
 instance Elt a => Matching f (Exp a) where
@@ -666,8 +660,7 @@ data PreExp acc exp t where
                 -> PreExp acc exp t
 
   Jump          :: (Elt arg, Elt t)
-                => Mask
-                -> exp arg
+                => exp arg
                 -> [(TagIx, exp t)]
                 -> PreExp acc exp t
 

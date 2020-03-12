@@ -183,13 +183,12 @@ instance (Elt a, Elt b) => Elt (Either a b) where
   --       Just (m, vs) -> (VarMask 1 [m], [ (TagIx n [t], Exp $ Match (mk x') (TagIx n [t])) | (t, x') <- vs ])
   --       Nothing      -> (VarMask 1 [] , [ (TagIx n [ ], Exp $ Match x (TagIx n []))])
   --
+  eltMask = Mask [[eltMask @a], [eltMask @b]]
   vary x =
-    Just (Mask 2 [VarMask 1 [lm], VarMask 1 [rm]], lvs ++ rvs)
+    Just (lvs ++ rvs)
     where
-      (lm, avs) = varied (fromLeft  x)
-      (rm, bvs) = varied (fromRight x)
-      lvs = [tagged 0 [t_a] (left  a') | (t_a, a') <- avs]
-      rvs = [tagged 1 [t_b] (right b') | (t_b, b') <- bvs]
+      lvs = [tagged 0 [t_a] (left  a') | (t_a, a') <- varied (fromLeft  x)]
+      rvs = [tagged 1 [t_b] (right b') | (t_b, b') <- varied (fromRight x)]
 
   varElt ((((), n), _), _) = n
 

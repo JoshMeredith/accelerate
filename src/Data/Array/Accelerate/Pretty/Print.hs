@@ -317,8 +317,9 @@ prettyPreOpenExp
 prettyPreOpenExp ctx prettyAcc extractAcc env aenv exp =
   case exp of
     Match e ix -> sep [ "Match:", parens $ ppTag ix, "->", ppE e ctx ]
-    Jump m e js -> sep [ "Jump:"
-                              , parens $ ppMask m
+    Jump  (e :: PreOpenExp acc env aenv arg) js ->
+                          sep [ "Jump:"
+                              , ppMask $ eltMask @arg
                               , parens (ppE e ctx)
                               , "["
                               , sep (intersperse "," (map ppEqn js))
@@ -372,9 +373,10 @@ prettyPreOpenExp ctx prettyAcc extractAcc env aenv exp =
   where
     ppTag (TagIx ix ixs) = sep $ "Tag" : pretty ix : "[" : (map ppTag ixs ++ ["]"])
 
-    ppMask (Mask n vms) = sep $ "Mask" : pretty n  : map ppVM vms
+    ppMask (Mask [[]]) = "_"
+    ppMask (Mask vms) = sep $ "[" : map ppVM vms ++ ["]"]
 
-    ppVM (VarMask _ ms) = sep [ "[", sep (map ppMask ms), "]" ]
+    ppVM ms = sep [ "{", sep (map ppMask ms), "}" ]
 
     ppEqn :: (TagIx, PreOpenExp acc env aenv t) -> Adoc
     ppEqn (ix, e) = parens $ sep [ ppTag ix, "->", ppE e ctx ]

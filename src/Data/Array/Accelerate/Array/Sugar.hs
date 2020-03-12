@@ -59,7 +59,7 @@ module Data.Array.Accelerate.Array.Sugar (
   -- * Miscellaneous
   showShape, Foreign(..), sliceShape, enumSlices,
 
-  TagIx(..), Mask(..), VarMask(..),
+  TagIx(..), Mask(..),
 
 ) where
 
@@ -214,8 +214,7 @@ data Divide sh = Divide
 -- >   deriving (Show, Generic, Elt)
 
 data TagIx   = TagIx   Int [TagIx]   deriving (Show)
-data Mask    = Mask    Int [VarMask] deriving (Show)
-data VarMask = VarMask Int [Mask]    deriving (Show)
+data Mask    = Mask [[Mask]] deriving (Show)
 
 class (Show a, Typeable a, Typeable (EltRepr a), ArrayElt (EltRepr a)) => Elt a where
   -- | Type representation mapping, which explains how to convert a type from
@@ -229,9 +228,11 @@ class (Show a, Typeable a, Typeable (EltRepr a), ArrayElt (EltRepr a)) => Elt a 
   fromElt  :: a -> EltRepr a
   toElt    :: EltRepr a -> a
 
-  vary :: Smart.Exp a -> Maybe (Mask, [(TagIx, Smart.Exp a)])
+  vary :: Smart.Exp a -> Maybe [(TagIx, Smart.Exp a)]
+  eltMask :: Mask
   varElt :: EltRepr a -> Word8
 
+  eltMask = Mask [[]]
   vary = const Nothing
   varElt _ = 0
 
