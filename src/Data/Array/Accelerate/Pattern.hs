@@ -34,6 +34,8 @@ module Data.Array.Accelerate.Pattern (
   pattern I0, pattern I1, pattern I2, pattern I3, pattern I4,
   pattern I5, pattern I6, pattern I7, pattern I8, pattern I9,
 
+  -- IsPattern(..), distract,
+
 ) where
 
 import Data.Array.Accelerate.Array.Sugar
@@ -49,6 +51,9 @@ import Language.Haskell.TH                                          hiding ( Exp
 pattern Pattern :: forall b a context. IsPattern context a b => b -> context a
 pattern Pattern vars <- (destruct @context -> vars)
   where Pattern = construct @context
+
+-- distract :: forall t a c. IsPattern Exp a t => Int -> ([TagIx] -> t -> c) -> Exp a -> Maybe c
+-- distract n = extract n destruct
 
 class IsPattern con a t where
   construct :: t -> con a

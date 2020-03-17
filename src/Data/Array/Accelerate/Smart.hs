@@ -70,7 +70,7 @@ module Data.Array.Accelerate.Smart (
   -- Debugging
   showPreAccOp, showPreExpOp,
 
-  TagIx(..), Mask(..), match, tagged, varied, maskN, tagN, Matching(..),
+  TagIx(..), Mask(..), match, tagged, maskN, tagN, Matching(..), variants, maskTags, retag, extract
 
 ) where
 
@@ -78,7 +78,6 @@ module Data.Array.Accelerate.Smart (
 import Prelude                                  hiding ( exp )
 import Data.Kind
 import Data.List
-import Data.Maybe
 import Data.Typeable
 
 -- friends
@@ -596,9 +595,39 @@ maskSize (Mask vars) = Prelude.sum (map (Prelude.product . map maskSize) vars)
 
 -- Equivalent to the mask that a single nullary contructor would have,
 -- essentially treating unknown/unmatchable types as unit.
-varied :: forall a. Elt a => Exp a -> [(TagIx, Exp a)]
-varied x@(Exp (Match _ ix)) = [(ix, x)]
-varied x = fromMaybe [tagged 0 [] x] (vary x)
+vary :: forall a. Elt a => Exp a -> [(TagIx, Exp a)]
+vary x = Prelude.map (\t -> (t, Exp $ Match x t)) (variants @a)
+
+variants :: forall a. Elt a => [TagIx]
+variants = maskTags (eltMask @a)
+
+maskTags :: Mask -> [TagIx]
+maskTags (Mask vs) = go =<< zip [0..] vs
+  where
+    go :: (Int, [Mask]) -> [TagIx]
+    go (n, vmask) = map (TagIx n) . sequence . map maskTags $ vmask
+
+retag :: Elt a => TagIx -> Exp a -> Exp a
+retag ix x = Exp (Match x ix)
+
+-- extract :: Int -> (Exp a -> b) -> Exp a -> Maybe ([TagIx], b)
+-- extract n extr (Exp (Match x (TagIx t ts))) | n == t = Just (ts, extr x)
+-- extract _ _ _                                        = Nothing
+
+extract :: Int -> (Exp a -> b) -> ([TagIx] -> b -> c) -> Exp a -> Maybe c
+extract n extr tag (Exp (Match x (TagIx t ts))) | n == t = Just (tag ts (extr x))
+extract _ _ _ _                                          = Nothing
+
+
+-- extractLeft :: (Elt a, Elt b) => Exp (Either a b) -> Maybe (Exp a)
+-- extractLeft (Exp (Match xy (TagIx 0 [lt]))) = Just (retag fromLeft lt xy)
+-- extractLeft _ = Nothing
+
+-- extractRight :: (Elt a, Elt b) => Exp (Either a b) -> Maybe (Exp b)
+-- extractRight (Exp (Match xy (TagIx 1 [rt]))) = Just (retag fromRight rt xy)
+-- extractRight _ = Nothing
+
+
 
 class (Elt (ResultT a), a ~ FnRep a (Exp (ResultT a))) => Matching f a where
   type ResultT a
@@ -617,8 +646,8 @@ instance (Elt e, Matching f a) => Matching f (Exp e -> a) where
   mkTup f h x = mkTup @f @a f (h . (x,))
 
   match' f (x@(Exp (Match _ _)), xs) = match' @f (f x) xs
-  match' f (x, xs) | Just vs <- vary x = Exp . Jump x $ [ (v, match' @f (f x') xs) | (v, x') <- vs]
-                   | otherwise = match' @f (f x) xs
+  match' f (x, xs) | Mask [[]] <- eltMask @e = match' @f (f x) xs
+  match' f (x, xs) = Exp . Jump x $ [ (v, match' @f (f x') xs) | (v, x') <- vary x]
 
 instance Elt a => Matching f (Exp a) where
   type ResultT (Exp a)   = a

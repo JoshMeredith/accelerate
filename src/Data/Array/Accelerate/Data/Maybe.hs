@@ -51,7 +51,7 @@ import Data.Array.Accelerate.Data.Semigroup
 #endif
 
 import Data.Maybe                                                   ( Maybe(..) )
-import Prelude                                                      ( (.), ($), const, otherwise )
+import Prelude                                                      ( (.), ($), const, otherwise, id )
 
 
 -- | Lift a value into a 'Just' constructor
@@ -168,30 +168,21 @@ instance Elt a => Elt (Maybe a) where
   --     common m a = (Mask 2 [VarMask 0 [], VarMask 1 m], ((TagIx 0 [], Exp $ Match nothing (TagIx 0 [])) : a))
   --
   eltMask = Mask [[], [eltMask @a]]
-  vary x =
-    Just (tagged 0 [] nothing : jvs)
-    where
-      jvs = [tagged 1 [t_a] (just a') | (t_a, a') <- varied (fromJust x)]
+  -- vary x =
+  --   Just (tagged 0 [] nothing : jvs)
+  --   where
+  --     jvs = [tagged 1 [t_a] (just a') | (t_a, a') <- varied (fromJust x)]
 
 
 pattern Just_ :: Elt a => Exp a -> Exp (Maybe a)
-pattern Just_ x <- (extractJust -> Just x)
+pattern Just_ x <- (extract 1 fromJust (\[jt] -> retag jt) -> Just x)
   where
     Just_ = just
 
 pattern Nothing_ :: Elt a => Exp (Maybe a)
-pattern Nothing_ <- (extractNothing -> True)
+pattern Nothing_ <- (extract 0 id (\[] _ -> ()) -> Just ())
   where
     Nothing_ = nothing
-
-extractJust :: Elt a => Exp (Maybe a) -> Maybe (Exp a)
-extractJust (Exp (Match (Exp (Tuple (_ `SnocTup` x))) (TagIx 1 _))) = Just x
-extractJust (Exp (Match x (TagIx 1 _))) = Just (fromJust x)
-extractJust _ = Nothing
-
-extractNothing :: Elt a => Exp (Maybe a) -> Bool
-extractNothing (Exp (Match _ (TagIx 0 _))) = True
-extractNothing _ = False
 
 instance Elt a => IsProduct Elt (Maybe a) where
   type ProdRepr (Maybe a) = ProdRepr (Word8, a)

@@ -1,4 +1,4 @@
-{-# LANGUAGE MagicHash, FlexibleContexts, BlockArguments, LambdaCase, DeriveGeneric, DeriveAnyClass, MultiParamTypeClasses, TypeFamilies, PatternSynonyms, ViewPatterns, UndecidableInstances, TypeApplications, ScopedTypeVariables, RebindableSyntax #-}
+{-# LANGUAGE AllowAmbiguousTypes, MagicHash, FlexibleContexts, BlockArguments, LambdaCase, DeriveGeneric, DeriveAnyClass, MultiParamTypeClasses, TypeFamilies, PatternSynonyms, ViewPatterns, UndecidableInstances, TypeApplications, ScopedTypeVariables, RebindableSyntax #-}
 {-# OPTIONS_GHC -Wall #-}
 
 module Test where
@@ -7,12 +7,12 @@ import qualified Data.Array.Accelerate as A
 import Data.Array.Accelerate (unlift)
 import Data.Array.Accelerate.Data.Either
 import Data.Array.Accelerate.Data.Maybe
--- import Data.Array.Accelerate.Smart (match)
 
 import Data.Array.Accelerate.Interpreter
 import Data.Array.Accelerate.Array.Sugar
 import Data.Array.Accelerate.Smart
 import Data.Array.Accelerate.Product
+-- import Data.Array.Accelerate.Pattern
 
 
 import Prelude
@@ -28,18 +28,6 @@ main = do
   -- print . run $ A.map fn $ use exprs
   -- print (match f)
   print . run $ A.map hybrid2 hybrid2s
-
-
-printVary :: forall t. Elt t => Exp t -> IO ()
-printVary x = case vary x of
-  Nothing -> print "No variants"
-  Just vs -> do
-    putStrLn "------"
-    print (eltMask @t)
-    putStrLn "---"
-    mapM_ (\(t, e) -> print t >> print e >> putStrLn "---") vs
-    putStrLn "------"
-
 
 -- fn :: Exp (Either (Either Int Int) ()) -> Exp Int
 -- fn = match go
@@ -125,14 +113,14 @@ mkDuo x1 x2 = Exp . Tuple $ NilTup `SnocTup` x1 `SnocTup` x2
 
 instance (Elt a, Elt b) => Elt (Duo a b) where
   eltMask = Mask [[eltMask @a, eltMask @b]]
-  vary x =
-    let
-      (x1, x2) = unduo x
-    in
-      Just [ tagged 0 [t1, t2] (mkDuo x1' x2')
-             | (t1, x1') <- varied x1
-             , (t2, x2') <- varied x2
-             ]
+  -- vary x =
+  --   let
+  --     (x1, x2) = unduo x
+  --   in
+  --     Just [ tagged 0 [t1, t2] (mkDuo x1' x2')
+  --            | (t1, x1') <- varied x1
+  --            , (t2, x2') <- varied x2
+  --            ]
 
 {-# COMPLETE Duo_ #-}
 pattern Duo_ :: (Elt a, Elt b) => Exp a -> Exp b -> Exp (Duo a b)
@@ -169,35 +157,35 @@ instance (Elt a, Elt b, Elt c) => Elt (Hybrid a b c) where
   --
   varElt (((((), n), _), _), _) = n
   eltMask = Mask [[], [eltMask @a], [eltMask @b, eltMask @c]]
-  vary x = Just $ concat [h0, h1, h2]
-    where
-      (b, c) = fromHybrid2 x
-      h0 = [tagged 0 [] (mkHybrid0 @a @b @c)]
-      h1 = [tagged 1 [t_a] (mkHybrid1 @a @b @c a') | (t_a, a') <- varied (fromHybrid1 x)]
-      h2 = [tagged 2 [t_b, t_c] (mkHybrid2 @a @b @c b' c') | (t_b, b') <- varied b, (t_c, c') <- varied c]
+  -- vary x = Just $ concat [h0, h1, h2]
+    -- where
+      -- (b, c) = fromHybrid2 x
+      -- h0 = [tagged 0 [] (mkHybrid0 @a @b @c)]
+      -- h1 = [tagged 1 [t_a] (mkHybrid1 @a @b @c a') | (t_a, a') <- varied (fromHybrid1 x)]
+      -- h2 = [tagged 2 [t_b, t_c] (mkHybrid2 @a @b @c b' c') | (t_b, b') <- varied b, (t_c, c') <- varied c]
 
-mkHybrid0 :: (Elt a, Elt b, Elt c) => Exp (Hybrid a b c)
-mkHybrid0 = Exp . Tuple $ NilTup `SnocTup` constant 0 `SnocTup` undef `SnocTup` undef `SnocTup` undef
+-- mkHybrid0 :: (Elt a, Elt b, Elt c) => Exp (Hybrid a b c)
+-- mkHybrid0 = Exp . Tuple $ NilTup `SnocTup` constant 0 `SnocTup` undef `SnocTup` undef `SnocTup` undef
 
-mkHybrid1 :: (Elt a, Elt b, Elt c) => Exp a -> Exp (Hybrid a b c)
-mkHybrid1 a = Exp . Tuple $ NilTup `SnocTup` constant 1 `SnocTup` a `SnocTup` undef `SnocTup` undef
+-- mkHybrid1 :: (Elt a, Elt b, Elt c) => Exp a -> Exp (Hybrid a b c)
+-- mkHybrid1 a = Exp . Tuple $ NilTup `SnocTup` constant 1 `SnocTup` a `SnocTup` undef `SnocTup` undef
 
-mkHybrid2 :: (Elt a, Elt b, Elt c) => Exp b -> Exp c -> Exp (Hybrid a b c)
-mkHybrid2 b c = Exp . Tuple $ NilTup `SnocTup` constant 2 `SnocTup` undef `SnocTup` b `SnocTup` c
+-- mkHybrid2 :: (Elt a, Elt b, Elt c) => Exp b -> Exp c -> Exp (Hybrid a b c)
+-- mkHybrid2 b c = Exp . Tuple $ NilTup `SnocTup` constant 2 `SnocTup` undef `SnocTup` b `SnocTup` c
 
-unHybrid0 :: (Elt a, Elt b, Elt c) => Exp (Hybrid a b c) -> Bool
-unHybrid0 (Exp (Match _ (TagIx 0 _))) = True
-unHybrid0 _                           = False
+-- unHybrid0 :: (Elt a, Elt b, Elt c) => Exp (Hybrid a b c) -> Bool
+-- unHybrid0 (Exp (Match _ (TagIx 0 _))) = True
+-- unHybrid0 _                           = False
 
-unHybrid1 :: (Elt a, Elt b, Elt c) => Exp (Hybrid a b c) -> Maybe (Exp a)
-unHybrid1 (Exp (Match (Exp (Tuple (NilTup `SnocTup` _tag `SnocTup` a `SnocTup` _b `SnocTup` _c))) (TagIx 1 _))) = Just a
-unHybrid1 (Exp (Match x (TagIx 1 _))) = Just (fromHybrid1 x)
-unHybrid1 _ = Nothing
+-- unHybrid1 :: (Elt a, Elt b, Elt c) => Exp (Hybrid a b c) -> Maybe (Exp a)
+-- unHybrid1 (Exp (Match (Exp (Tuple (NilTup `SnocTup` _tag `SnocTup` a `SnocTup` _b `SnocTup` _c))) (TagIx 1 _))) = Just a
+-- unHybrid1 (Exp (Match x (TagIx 1 _))) = Just (fromHybrid1 x)
+-- unHybrid1 _ = Nothing
 
-unHybrid2 :: (Elt a, Elt b, Elt c) => Exp (Hybrid a b c) -> Maybe (Exp b, Exp c)
-unHybrid2 (Exp (Match (Exp (Tuple (NilTup `SnocTup` _tag `SnocTup` _a `SnocTup` b `SnocTup` c))) (TagIx 2 _))) = Just (b, c)
-unHybrid2 (Exp (Match x (TagIx 1 _))) = Just (fromHybrid2 x)
-unHybrid2 _ = Nothing
+-- unHybrid2 :: (Elt a, Elt b, Elt c) => Exp (Hybrid a b c) -> Maybe (Exp b, Exp c)
+-- unHybrid2 (Exp (Match (Exp (Tuple (NilTup `SnocTup` _tag `SnocTup` _a `SnocTup` b `SnocTup` c))) (TagIx 2 _))) = Just (b, c)
+-- unHybrid2 (Exp (Match x (TagIx 1 _))) = Just (fromHybrid2 x)
+-- unHybrid2 _ = Nothing
 
 fromHybrid1 :: (Elt a, Elt b, Elt c) => Exp (Hybrid a b c) -> Exp a
 fromHybrid1 x = Exp ((SuccTupIdx $ SuccTupIdx $ ZeroTupIdx) `Prj` x)
@@ -208,19 +196,19 @@ fromHybrid2 x = (Exp ((SuccTupIdx ZeroTupIdx) `Prj` x), Exp (ZeroTupIdx `Prj` x)
 {-# COMPLETE Zero_, One_, Two_ #-}
 
 pattern Zero_ :: (Elt a, Elt b, Elt c) => Exp (Hybrid a b c)
-pattern Zero_ <- (unHybrid0 -> True)
+pattern Zero_ <- (extract 0 id (\[] _ -> ()) -> Just ())
   where
-    Zero_ = mkHybrid0
+    Zero_ = A.Pattern (constant 0, undef, undef, undef)
 
 pattern One_ :: (Elt a, Elt b, Elt c) => Exp a -> Exp (Hybrid a b c)
-pattern One_ a <- (unHybrid1 -> Just a)
+pattern One_ a <- (extract 1 fromHybrid1 (\[at] -> retag at) -> Just a)
   where
-    One_ = mkHybrid1
+    One_ a = A.Pattern (constant 1, a, undef, undef)
 
 pattern Two_ :: (Elt a, Elt b, Elt c) => Exp b -> Exp c -> Exp (Hybrid a b c)
-pattern Two_ b c <- (unHybrid2 -> Just (b, c))
+pattern Two_ b c <- (extract 2 fromHybrid2 (\[bt, ct] (b, c) -> (retag bt b, retag ct c)) -> Just (b, c))
   where
-    Two_ = mkHybrid2
+    Two_ b c = A.Pattern (constant 2, undef, b, c)
 
 
 hybrid0 :: Exp (Hybrid Int Int Int) -> Exp Int

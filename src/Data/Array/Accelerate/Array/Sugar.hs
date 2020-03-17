@@ -37,7 +37,7 @@ module Data.Array.Accelerate.Array.Sugar (
   Arrays(..), ArraysR(..),
 
   -- * Class of supported surface element types and their mapping to representation types
-  Elt(..),
+  Elt(..), GElt(..),
 
   -- * Derived functions
   liftToElt, liftToElt2, sinkFromElt, sinkFromElt2,
@@ -84,8 +84,6 @@ import Data.Array.Accelerate.Orphans                            ()
 import Data.Array.Accelerate.Product
 import Data.Array.Accelerate.Type
 import qualified Data.Array.Accelerate.Array.Representation     as Repr
-
-import {-# SOURCE #-} qualified Data.Array.Accelerate.Smart     as Smart
 
 -- $setup
 -- >>> :seti -XOverloadedLists
@@ -213,8 +211,8 @@ data Divide sh = Divide
 -- > data Point = Point Int Float
 -- >   deriving (Show, Generic, Elt)
 
-data TagIx   = TagIx   Int [TagIx]   deriving (Show)
-data Mask    = Mask [[Mask]] deriving (Show)
+data TagIx   = TagIx Int  [TagIx]  deriving (Show)
+data Mask    = Mask      [[Mask ]] deriving (Show)
 
 class (Show a, Typeable a, Typeable (EltRepr a), ArrayElt (EltRepr a)) => Elt a where
   -- | Type representation mapping, which explains how to convert a type from
@@ -228,12 +226,10 @@ class (Show a, Typeable a, Typeable (EltRepr a), ArrayElt (EltRepr a)) => Elt a 
   fromElt  :: a -> EltRepr a
   toElt    :: EltRepr a -> a
 
-  vary :: Smart.Exp a -> Maybe [(TagIx, Smart.Exp a)]
   eltMask :: Mask
   varElt :: EltRepr a -> Word8
 
   eltMask = Mask [[]]
-  vary = const Nothing
   varElt _ = 0
 
   {-# INLINE eltType #-}
@@ -261,26 +257,30 @@ class GElt f where
   geltType :: TupleType t -> TupleType (GEltRepr t f)
   gfromElt :: t -> f a -> GEltRepr t f
   gtoElt   :: GEltRepr t f -> (t, f a)
+  geltMask :: Mask
 
 instance GElt U1 where
   type GEltRepr t U1 = t
   geltType t    =  t
   gfromElt t U1 =  t
   gtoElt   t    = (t, U1)
+  geltMask      = Mask [[]]
 
 instance GElt a => GElt (M1 i c a) where
   type GEltRepr t (M1 i c a) = GEltRepr t a
   geltType          = geltType @a
   gfromElt t (M1 x) = gfromElt t x
   gtoElt         x  = let (t, x1) = gtoElt x in (t, M1 x1)
+  geltMask          = geltMask @a
 
 instance Elt a => GElt (K1 i a) where
   type GEltRepr t (K1 i a) = (t, EltRepr a)
   geltType t        = TypeRpair t (eltType @a)
   gfromElt t (K1 x) = (t, fromElt x)
   gtoElt     (t, x) = (t, K1 (toElt x))
+  geltMask          = Mask [[eltMask @a]]
 
-instance (GElt a, GElt b) => GElt (a :*: b) where
+instance (GElt a, GElt b, GProdElt a, GProdElt b) => GElt (a :*: b) where
   type GEltRepr t (a :*: b) = GEltRepr (GEltRepr t a) b
   geltType             = geltType @b . geltType @a
   gfromElt t (a :*: b) = gfromElt (gfromElt t a) b
@@ -289,6 +289,24 @@ instance (GElt a, GElt b) => GElt (a :*: b) where
         (t2, a) = gtoElt t1
     in
     (t2, a :*: b)
+  geltMask = Mask [gprodEltMask @(a :*: b)]
+
+instance (GElt a, GElt b) => GElt (a :+: b) where
+  geltMask = let Mask lms = geltMask @a
+                 Mask rms = geltMask @b
+             in  Mask (lms ++ rms)
+
+class GProdElt (a :: Type -> Type) where
+  gprodEltMask :: [Mask]
+
+instance (GProdElt a, GProdElt b) => GProdElt (a :*: b) where
+  gprodEltMask = gprodEltMask @a ++ gprodEltMask @b
+
+instance GElt a => GProdElt (M1 i c a) where
+  gprodEltMask = [geltMask @a]
+
+instance Elt a => GProdElt (K1 i a) where
+  gprodEltMask = [eltMask @a]
 
 
 -- Note: [Deriving Elt]

@@ -55,7 +55,7 @@ import Data.Array.Accelerate.Data.Semigroup
 
 import Data.Either                                                  ( Either(..) )
 import Data.Maybe
-import Prelude                                                      ( (.), ($), const, otherwise, (++) )
+import Prelude                                                      ( (.), ($), const, otherwise )
 import qualified Prelude
 
 
@@ -184,37 +184,26 @@ instance (Elt a, Elt b) => Elt (Either a b) where
   --       Nothing      -> (VarMask 1 [] , [ (TagIx n [ ], Exp $ Match x (TagIx n []))])
   --
   eltMask = Mask [[eltMask @a], [eltMask @b]]
-  vary x =
-    Just (lvs ++ rvs)
-    where
-      lvs = [tagged 0 [t_a] (left  a') | (t_a, a') <- varied (fromLeft  x)]
-      rvs = [tagged 1 [t_b] (right b') | (t_b, b') <- varied (fromRight x)]
+  -- vary x =
+  --   Just (lvs ++ rvs)
+  --   where
+  --     lvs = [tagged 0 [t_a] (left  a') | (t_a, a') <- varied (fromLeft  x)]
+  --     rvs = [tagged 1 [t_b] (right b') | (t_b, b') <- varied (fromRight x)]
 
   varElt ((((), n), _), _) = n
 
 {-# COMPLETE Left_, Right_ #-}
 
 pattern Left_ :: (Elt a, Elt b) => Exp a -> Exp (Either a b)
-pattern Left_ x <- (extractLeft -> Just x)
+pattern Left_ x <- (extract 0 fromLeft (\[lt] -> retag lt) -> Just x)
   where
     Left_ = left
 
--- pattern Left_ x = x@(Exp (Match (TagIx 0) _))
-
 pattern Right_ :: (Elt a, Elt b) => Exp b -> Exp (Either a b)
-pattern Right_ x <- (extractRight -> Just x)
+pattern Right_ x <- (extract 1 fromRight (\[rt] -> retag rt) -> Just x)
   where
     Right_ = right
 
-extractLeft :: (Elt a, Elt b) => Exp (Either a b) -> Maybe (Exp a)
-extractLeft (Exp (Match (Exp (Tuple (_ `SnocTup` x `SnocTup` _))) (TagIx 0 _))) = Just x
-extractLeft (Exp (Match xy (TagIx 0 _))) = Just (fromLeft xy)
-extractLeft _ = Nothing
-
-extractRight :: (Elt a, Elt b) => Exp (Either a b) -> Maybe (Exp b)
-extractRight (Exp (Match (Exp (Tuple (_ `SnocTup` y))) (TagIx 1 _))) = Just y
-extractRight (Exp (Match xy (TagIx 1 _))) = Just (fromRight xy)
-extractRight _ = Nothing
 
 instance (Elt a, Elt b) => IsProduct Elt (Either a b) where
   type ProdRepr (Either a b) = ProdRepr (Word8, a, b)
